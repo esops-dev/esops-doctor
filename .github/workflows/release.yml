@@ -1,46 +1,42 @@
-name: release
+name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ['v*']
 
 permissions:
-  contents: write
-  id-token: write
-  packages: write
-  attestations: write
+  contents: read
 
 jobs:
   goreleaser:
+    name: GoReleaser
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
     outputs:
-      hashes: ${{ steps.hashes.outputs.hashes }}
+      hashes: ${{ steps.hash.outputs.hashes }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
-          go-version: stable
+          go-version-file: go.mod
           cache: true
 
-      - name: install cosign
-        uses: sigstore/cosign-installer@v3
+      - uses: sigstore/cosign-installer@v3
 
-      - name: install syft
-        uses: anchore/sbom-action/download-syft@v0
+      - uses: anchore/sbom-action/download-syft@v0
 
-      - name: resolve esops-go module version
+      - name: Resolve esops-go module version
         id: esops
         run: |
           v=$(go list -m -f '{{.Version}}' github.com/esops-dev/esops-go 2>/dev/null || echo unknown)
           echo "version=${v}" >>"$GITHUB_OUTPUT"
 
-      - name: goreleaser
-        id: goreleaser
-        uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           version: latest
@@ -49,34 +45,21 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ESOPS_MODULE_VERSION: ${{ steps.esops.outputs.version }}
 
-      # SLSA generic provenance wants base64(checksum-file). goreleaser
-      # already emitted checksums.txt; pull its path out of the action's
-      # artifacts.json output and base64-encode it for the next job.
-      - name: collect artifact hashes
-        id: hashes
-        env:
-          ARTIFACTS: ${{ steps.goreleaser.outputs.artifacts }}
+      - name: Compute release subjects for provenance
+        id: hash
+        working-directory: dist
         run: |
-          set -euo pipefail
-          checksum_file=$(echo "$ARTIFACTS" | jq -r '.[] | select(.type=="Checksum") | .path')
-          if [ -z "$checksum_file" ] || [ ! -f "$checksum_file" ]; then
-            echo "no checksum file in goreleaser artifacts" >&2
-            exit 1
-          fi
-          echo "hashes=$(base64 -w0 < "$checksum_file")" >>"$GITHUB_OUTPUT"
-
-      - name: attest binary provenance
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-path: "dist/*"
+          echo "hashes=$(base64 -w0 < checksums.txt)" >> "$GITHUB_OUTPUT"
 
   provenance:
-    needs: goreleaser
+    name: SLSA Provenance
+    needs: [goreleaser]
     permissions:
       actions: read
       id-token: write
       contents: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
     with:
       base64-subjects: ${{ needs.goreleaser.outputs.hashes }}
       upload-assets: true
+      private-repository: true
