@@ -1,0 +1,12 @@
+name: prod
+description: Production scans. Promotes hygiene checks toward critical.
+
+severity_overrides:
+  heap_size: critical
+  bootstrap_memory_lock: critical
+  default_credentials: critical
+  tls_transport: critical
+  anonymous_access: critical
+
+skip_tags: []
+include_tags: []

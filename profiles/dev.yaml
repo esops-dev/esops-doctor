@@ -1,0 +1,11 @@
+name: dev
+description: Local development. Demotes hygiene findings toward info.
+
+severity_overrides:
+  bootstrap_memory_lock: info
+  dedicated_master_nodes: info
+  zone_awareness: info
+
+skip_tags:
+  - prod-only
+include_tags: []

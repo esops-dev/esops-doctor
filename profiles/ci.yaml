@@ -1,0 +1,6 @@
+name: ci
+description: CI pipelines. Deterministic exit codes; no interactive output.
+
+severity_overrides: {}
+skip_tags: []
+include_tags: []
