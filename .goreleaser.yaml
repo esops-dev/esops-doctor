@@ -1,0 +1,105 @@
+version: 2
+
+project_name: esops-doctor
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: esops-doctor
+    main: ./cmd/esops-doctor
+    binary: esops-doctor
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/esops-dev/esops-doctor/internal/version.Version={{.Version}}
+      - -X github.com/esops-dev/esops-doctor/internal/version.Commit={{.ShortCommit}}
+      - -X github.com/esops-dev/esops-doctor/internal/version.Date={{.Date}}
+      - -X github.com/esops-dev/esops-doctor/internal/version.EsopsModule={{.Env.ESOPS_MODULE_VERSION}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - id: default
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- if eq .Os "darwin" }}macos
+      {{- else }}{{ .Os }}{{ end }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - NOTICE
+      - README.md
+      # TODO: ship shell completions once the binary can emit them.
+      # Re-add `completions/*` here and the per-shell nfpms.contents
+      # entries below when the generator lands.
+
+nfpms:
+  - id: packages
+    package_name: esops-doctor
+    vendor: esops-dev
+    homepage: https://github.com/esops-dev/esops-doctor
+    maintainer: esops-dev <ops@esops.dev>
+    description: |-
+      Read-only diagnostic linter for self-managed Elasticsearch and OpenSearch
+      clusters.
+    license: Apache-2.0
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    # TODO: re-add per-shell completion contents (bash → /usr/share/
+    # bash-completion/completions, zsh → /usr/share/zsh/site-functions,
+    # fish → /usr/share/fish/vendor_completions.d) when the generator
+    # lands; mirrored from the archive `files` block above.
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
+
+sboms:
+  - artifacts: archive
+
+signs:
+  - cmd: cosign
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+release:
+  prerelease: auto
+  draft: false

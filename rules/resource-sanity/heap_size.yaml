@@ -1,0 +1,24 @@
+checks:
+  - id: heap_size
+    name: JVM heap size configuration
+    category: resource_sanity
+    severity: critical
+    description: >
+      Heap should be ~50% of physical RAM and capped at 31 GiB so that
+      compressed object pointers stay enabled.
+    probe: nodes
+    condition: |
+      size(self) > 0 &&
+      self.all(node,
+        has(node.jvm) &&
+        node.jvm.heap.init <= (node.os.total_physical_memory * 0.5) &&
+        node.jvm.heap.max <= 31 * 1024 * 1024 * 1024
+      )
+    message: Heap size misconfigured on {{count}} nodes.
+    remediation:
+      command: Update JVM options and restart nodes
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/heap-size.html
+    tags: [prod, performance]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

@@ -1,0 +1,58 @@
+name: Rule request
+description: Propose a new diagnostic rule
+labels: [rule]
+body:
+  - type: input
+    id: rule-id
+    attributes:
+      label: Proposed rule ID
+      placeholder: heap_size
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - resource_sanity
+        - mappings
+        - lifecycle
+        - security
+        - hygiene
+        - bootstrap
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - info
+        - warn
+        - error
+        - critical
+    validations:
+      required: true
+
+  - type: textarea
+    id: rationale
+    attributes:
+      label: What does it detect, and why does it matter?
+    validations:
+      required: true
+
+  - type: textarea
+    id: dialects
+    attributes:
+      label: Dialects and versions
+      description: Elasticsearch / OpenSearch and which major versions.
+    validations:
+      required: true
+
+  - type: textarea
+    id: remediation
+    attributes:
+      label: Remediation
+      description: Concrete `esops` command if one applies.
