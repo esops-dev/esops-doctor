@@ -4,15 +4,22 @@ checks:
     category: resource_sanity
     severity: critical
     description: >
-      Heap should be ~50% of physical RAM and capped at 31 GiB so that
-      compressed object pointers stay enabled.
-    probe: nodes
+      JVM heap should be ~50% of physical RAM and capped at 31 GiB so
+      that compressed object pointers stay enabled. Nodes that do not
+      report JVM info (coordinating-only or stripped builds) are
+      skipped via the !has() guard.
+    probe: node_stats
     condition: |
       size(self) > 0 &&
       self.all(node,
-        has(node.jvm) &&
-        node.jvm.heap.init * 2 <= node.os.total_physical_memory &&
-        node.jvm.heap.max <= 31 * 1024 * 1024 * 1024
+        !has(node.jvm) || !has(node.jvm.heap) || !has(node.jvm.heap.max_bytes) ||
+        (
+          int(node.jvm.heap.max_bytes) <= 31 * 1024 * 1024 * 1024 &&
+          (
+            !has(node.os) || !has(node.os.total_physical_memory_bytes) ||
+            int(node.jvm.heap.init_bytes) * 2 <= int(node.os.total_physical_memory_bytes)
+          )
+        )
       )
     message: Heap size misconfigured on {{count}} nodes.
     remediation:

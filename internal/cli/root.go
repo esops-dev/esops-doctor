@@ -8,7 +8,8 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/esops-dev/esops-doctor/internal/config"
+	"github.com/esops-dev/esops-go/pkg/config"
+
 	"github.com/esops-dev/esops-doctor/internal/exit"
 	"github.com/esops-dev/esops-doctor/internal/logging"
 	"github.com/esops-dev/esops-doctor/internal/version"
@@ -33,6 +34,7 @@ func newRoot() *cli.Command {
 		Flags:  globalFlags(),
 		Before: initLogger,
 		Commands: []*cli.Command{
+			scanCommand(),
 			validateRulesCommand(),
 			versionCommand(),
 		},
@@ -105,21 +107,36 @@ func globalFlags() []cli.Flag {
 	}
 }
 
-// validOutputFormats lists the accepted --output values. Kept here
-// (not in a report package) so the flag can validate without the
-// report layer existing yet.
-var validOutputFormats = []string{"table", "json", "yaml", "sarif", "junit", "html"}
+// implementedOutputFormats lists the formats the report layer can
+// actually render today. Add a name here once a renderer lands; until
+// then, passing the format value silently fell through to a table —
+// which CLAUDE.md §10 explicitly warns against ("scriptable" formats
+// must be honoured exactly). Better to reject loudly with exit 2.
+var implementedOutputFormats = []string{"table"}
+
+// plannedOutputFormats lists the formats CLAUDE.md §10 promises but
+// have not landed yet (Milestone 3). Listed separately so the error
+// message tells the operator the format is *known* but not yet wired,
+// rather than rejected as a typo.
+var plannedOutputFormats = []string{"json", "yaml", "sarif", "junit", "html"}
 
 func validateOutput(s string) error {
 	if s == "" {
 		return nil
 	}
-	for _, v := range validOutputFormats {
+	for _, v := range implementedOutputFormats {
 		if strings.EqualFold(s, v) {
 			return nil
 		}
 	}
-	return exit.Usage("--output %q is not supported (accepted: %s)", s, strings.Join(validOutputFormats, ", "))
+	for _, v := range plannedOutputFormats {
+		if strings.EqualFold(s, v) {
+			return exit.Usage("--output %q is documented but not yet implemented (Milestone 3); only %s is wired today",
+				s, strings.Join(implementedOutputFormats, ", "))
+		}
+	}
+	return exit.Usage("--output %q is not supported (accepted: %s)",
+		s, strings.Join(implementedOutputFormats, ", "))
 }
 
 func validateLogLevel(s string) error {
@@ -181,8 +198,9 @@ func readDefaults(explicit string) config.Defaults {
 // a shorthand operators expect; an explicit --log-level wins because the
 // principle is "the flag the user typed beats the flag they implied".
 //
-// TODO: when the report layer lands, --quiet should also suppress
-// non-error findings on stdout. Currently it only affects logs.
+// On stdout, --quiet additionally drops the per-skipped section from
+// the table report — that wiring lives in cli/scan.go where the flag
+// is read and threaded into report.TableOptions.
 func resolveLogLevel(cmd *cli.Command, fromConfig string) string {
 	if cmd.IsSet("log-level") {
 		return cmd.String("log-level")
@@ -206,6 +224,28 @@ func resolveSetting(cmd *cli.Command, flag, fromConfig, builtin string) string {
 		return fromConfig
 	}
 	return builtin
+}
+
+// resolveOutput picks the report format in priority order: explicit
+// --output > defaults.output from the config file > "table". The
+// resolved value is asserted against implementedOutputFormats so a
+// `defaults.output: json` in an operator's config fails loud
+// (Milestone-3 message) rather than silently rendering a table.
+func resolveOutput(cmd *cli.Command, fromConfig string) (string, error) {
+	picked := resolveSetting(cmd, "output", fromConfig, "table")
+	for _, v := range implementedOutputFormats {
+		if strings.EqualFold(picked, v) {
+			return strings.ToLower(picked), nil
+		}
+	}
+	for _, v := range plannedOutputFormats {
+		if strings.EqualFold(picked, v) {
+			return "", exit.Usage("output %q is documented but not yet implemented (Milestone 3); only %s is wired today",
+				picked, strings.Join(implementedOutputFormats, ", "))
+		}
+	}
+	return "", exit.Usage("output %q is not supported (accepted: %s)",
+		picked, strings.Join(implementedOutputFormats, ", "))
 }
 
 // defaultLogFormat returns "json" under CI and "text" otherwise. Used

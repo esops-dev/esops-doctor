@@ -176,6 +176,45 @@ func TestValidateAliasCollidesWithID(t *testing.T) {
 	}
 }
 
+func TestValidateProbesAcceptsKnown(t *testing.T) {
+	cat := &Catalog{Rules: []Rule{validRule()}}
+	known := func(name string) bool { return name == "nodes" }
+	if errs := cat.ValidateProbes(known); len(errs) != 0 {
+		t.Errorf("expected no errors, got %v", errs)
+	}
+}
+
+func TestValidateProbesFlagsUnknown(t *testing.T) {
+	r := validRule()
+	r.Probe = "no_such_probe"
+	cat := &Catalog{Rules: []Rule{r}}
+	known := func(name string) bool { return name == "nodes" }
+	errs := cat.ValidateProbes(known)
+	if len(errs) != 1 {
+		t.Fatalf("expected one error, got %d: %v", len(errs), errs)
+	}
+	if !strings.Contains(errs[0].Message, "unknown probe") {
+		t.Errorf("message should describe unknown probe; got %q", errs[0].Message)
+	}
+	if !strings.Contains(errs[0].Message, "no_such_probe") {
+		t.Errorf("message should reference the probe name; got %q", errs[0].Message)
+	}
+	if errs[0].RuleID != r.ID {
+		t.Errorf("RuleID = %q, want %q", errs[0].RuleID, r.ID)
+	}
+}
+
+func TestValidateProbesSkipsEmptyProbe(t *testing.T) {
+	// An empty Probe is already covered by Validate() with
+	// "probe is required"; ValidateProbes must not double-report.
+	r := validRule()
+	r.Probe = ""
+	cat := &Catalog{Rules: []Rule{r}}
+	if errs := cat.ValidateProbes(func(string) bool { return false }); len(errs) != 0 {
+		t.Errorf("expected no errors for empty probe (covered by Validate); got %v", errs)
+	}
+}
+
 // TestValidateThroughLoader sanity-checks that loading a YAML file
 // with a missing severity surfaces as a YAML error during Load (the
 // Severity unmarshaller rejects unknown levels), not a Validate

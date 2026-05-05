@@ -27,6 +27,27 @@ var ErrUsage = errors.New("usage error")
 // "rules ran and flagged something".
 var ErrCatalog = errors.New("rule catalog error")
 
+// Cluster-side sentinels. probes.Connect wraps the upstream pkg/client
+// sentinels with these so the exit-code mapping stays in this package
+// without dragging pkg/client into the import graph outside probes/.
+//
+//   - ErrUnreachable: transport layer failed (DNS, TCP, TLS handshake) — exit 3
+//   - ErrAuth: HTTP 401 from the cluster — exit 4
+//   - ErrForbidden: HTTP 403 from the cluster — exit 5
+//   - ErrUnknownProduct: GET / returned something we don't recognise — exit 10
+var (
+	ErrUnreachable    = errors.New("cluster unreachable")
+	ErrAuth           = errors.New("authentication failed")
+	ErrForbidden      = errors.New("authorization failed")
+	ErrUnknownProduct = errors.New("cluster is neither Elasticsearch nor OpenSearch")
+)
+
+// ErrFindings is the marker for "rules ran and flagged at least one
+// finding at or above the --fail-on threshold". Exit 20. Distinct from
+// generic error (1) so CI can tell "the lint failed honestly" apart from
+// "the tool itself broke".
+var ErrFindings = errors.New("findings at or above --fail-on threshold")
+
 // Code returns the documented exit code for err. Sentinels in this
 // package take priority; context.Canceled (SIGINT/SIGTERM) maps to 130
 // because we can't tell which signal fired from the cancelled context
@@ -40,6 +61,16 @@ func Code(err error) int {
 		return 0
 	case errors.Is(err, ErrUsage):
 		return 2
+	case errors.Is(err, ErrUnreachable):
+		return 3
+	case errors.Is(err, ErrAuth):
+		return 4
+	case errors.Is(err, ErrForbidden):
+		return 5
+	case errors.Is(err, ErrUnknownProduct):
+		return 10
+	case errors.Is(err, ErrFindings):
+		return 20
 	case errors.Is(err, ErrCatalog):
 		return 21
 	case errors.Is(err, context.Canceled):

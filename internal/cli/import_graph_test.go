@@ -12,39 +12,137 @@ import (
 	"testing"
 )
 
-// TestNoForbiddenClusterClientImports asserts that nothing under
-// internal/... or cmd/... transitively imports a raw Elasticsearch or
-// OpenSearch Go client. The read-only-by-construction guarantee depends
-// on every cluster touch routing through esops-go/pkg/client; a direct
-// import of either upstream client would let a mutating call slip past
-// the boundary, defeating the headline guarantee.
+// TestNoForbiddenClusterClientImports asserts that no doctor source
+// file directly imports a raw Elasticsearch or OpenSearch Go client.
+// Direct imports would let a mutating call slip past the read-only
+// pkg/client surface and defeat the headline guarantee.
+//
+// The check is direct-imports-only — transitive presence is unavoidable
+// once anything in doctor imports esops-go/pkg/cluster, which legitimately
+// composes the upstream client adapters and brings the elastic /
+// opensearch / aws / otel transports along as `// indirect` go.sum
+// entries (see CLAUDE.md §4 on OTEL appearing indirect). Direct imports
+// are what we ban; transitive presence under the upstream's hood is
+// what `pkg/cluster` exists to encapsulate.
 func TestNoForbiddenClusterClientImports(t *testing.T) {
 	forbidden := []string{
 		"github.com/elastic/go-elasticsearch",
 		"github.com/opensearch-project/opensearch-go",
 	}
 
-	out, err := exec.Command(
-		"go", "list", "-deps", "-f", "{{.ImportPath}}",
-		"github.com/esops-dev/esops-doctor/cmd/...",
-		"github.com/esops-dev/esops-doctor/internal/...",
-	).Output()
-	if err != nil {
-		t.Fatalf("go list: %v", err)
-	}
-
-	var hits []string
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+	hits, err := scanDoctorImports(func(importPath string) string {
 		for _, prefix := range forbidden {
-			if line == prefix || strings.HasPrefix(line, prefix+"/") {
-				hits = append(hits, line)
+			if importPath == prefix || strings.HasPrefix(importPath, prefix+"/") {
+				return "raw cluster client"
 			}
 		}
+		return ""
+	})
+	if err != nil {
+		t.Fatalf("scan: %v", err)
 	}
 	if len(hits) > 0 {
-		t.Fatalf("forbidden cluster client in transitive import graph:\n  %s\nroute every cluster touch through esops-go/pkg/client",
+		t.Fatalf("forbidden raw cluster client imported directly:\n  %s\nroute every cluster touch through esops-go/pkg/client (and pkg/cluster for construction)",
 			strings.Join(hits, "\n  "))
 	}
+}
+
+// TestPkgClientOnlyInProbes asserts that esops-go/pkg/client is imported
+// only from internal/probes/. CLAUDE.md §5 makes the probe layer the
+// single greppable cluster-touch boundary; this test fails as soon as
+// another package introduces a pkg/client import. pkg/cluster construction
+// also lives in internal/probes/ (probes.Connect) so the same constraint
+// covers it.
+func TestPkgClientOnlyInProbes(t *testing.T) {
+	allowed := map[string]struct{}{
+		"internal/probes": {},
+	}
+	watched := []string{
+		"github.com/esops-dev/esops-go/pkg/client",
+		"github.com/esops-dev/esops-go/pkg/cluster",
+	}
+
+	hits, err := scanDoctorImports(func(importPath string) string {
+		for _, w := range watched {
+			if importPath == w {
+				return importPath
+			}
+		}
+		return ""
+	})
+	if err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+
+	var bad []string
+	for _, h := range hits {
+		// h is "<rel-path>:<line>: <category>"; the rel path tells us
+		// which package the import lives in. Allow when the directory
+		// is under one of the allowed package roots.
+		path := strings.SplitN(h, ":", 2)[0]
+		ok := false
+		for prefix := range allowed {
+			if strings.HasPrefix(path, prefix+"/") || strings.HasPrefix(path, prefix+string(filepath.Separator)) {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			bad = append(bad, h)
+		}
+	}
+	if len(bad) > 0 {
+		t.Fatalf("pkg/client (or pkg/cluster) imported outside internal/probes/:\n  %s\nkeep cluster construction and capability access within probes",
+			strings.Join(bad, "\n  "))
+	}
+}
+
+// scanDoctorImports walks every non-test .go file under internal/ and
+// cmd/, parses each, and yields one "<rel-path>:<line>: <category>"
+// hit per import whose path makes match return a non-empty category.
+// _test.go files are skipped so test-only imports (testify, fakes, etc.)
+// don't trip the rule.
+func scanDoctorImports(match func(importPath string) string) ([]string, error) {
+	out, err := exec.Command("go", "list", "-m", "-f", "{{.Dir}}").Output()
+	if err != nil {
+		return nil, fmt.Errorf("go list -m: %w", err)
+	}
+	modRoot := strings.TrimSpace(string(out))
+
+	fset := token.NewFileSet()
+	var hits []string
+
+	for _, sub := range []string{"internal", "cmd"} {
+		root := filepath.Join(modRoot, sub)
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			f, perr := parser.ParseFile(fset, path, nil, parser.ImportsOnly)
+			if perr != nil {
+				return fmt.Errorf("parse %s: %w", path, perr)
+			}
+			for _, imp := range f.Imports {
+				ip := strings.Trim(imp.Path.Value, `"`)
+				if cat := match(ip); cat != "" {
+					rel, _ := filepath.Rel(modRoot, path)
+					pos := fset.Position(imp.Pos())
+					hits = append(hits, fmt.Sprintf("%s:%d: %s", rel, pos.Line, cat))
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("walk %s: %w", sub, err)
+		}
+	}
+	return hits, nil
 }
 
 // pkgClientImportPath is the only allowed entry point for cluster I/O.

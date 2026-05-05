@@ -68,6 +68,12 @@ func evalOne(ctx context.Context, cr compiledRule, registry ProbeRegistry, diale
 			res.SkipReason = fmt.Sprintf("probe %q not registered", cr.rule.Probe)
 			return res
 		}
+		if errors.Is(entry.err, ErrProbeNotApplicable) {
+			res.Status = RuleStatusSkipped
+			res.SkipReason = fmt.Sprintf("probe %q not applicable on dialect %q: %s",
+				cr.rule.Probe, dialect, entry.err)
+			return res
+		}
 		res.Status = RuleStatusError
 		res.Err = fmt.Errorf("fetching probe %q: %w", cr.rule.Probe, entry.err)
 		return res
