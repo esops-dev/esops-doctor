@@ -10,3 +10,4 @@ coverage.txt
 .env
 .env.*
 !.env.example
+**/esops.log

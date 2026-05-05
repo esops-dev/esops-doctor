@@ -33,6 +33,7 @@ func newRoot() *cli.Command {
 		Flags:  globalFlags(),
 		Before: initLogger,
 		Commands: []*cli.Command{
+			validateRulesCommand(),
 			versionCommand(),
 		},
 	}

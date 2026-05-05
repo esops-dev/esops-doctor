@@ -11,7 +11,7 @@ checks:
       size(self) > 0 &&
       self.all(node,
         has(node.jvm) &&
-        node.jvm.heap.init <= (node.os.total_physical_memory * 0.5) &&
+        node.jvm.heap.init * 2 <= node.os.total_physical_memory &&
         node.jvm.heap.max <= 31 * 1024 * 1024 * 1024
       )
     message: Heap size misconfigured on {{count}} nodes.
