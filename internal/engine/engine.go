@@ -168,8 +168,16 @@ func (s RuleStatus) String() string {
 //
 // Skipped is reported (not silent) per CLAUDE.md §3 so an operator
 // sees that a rule was inapplicable rather than absent.
+//
+// Rule is the full rule definition, included so renderers can show
+// rule metadata (name, category, severity, description, dialects,
+// tags) on every status — not just on fails. This is what lets a
+// passing-rule row carry useful context in json/yaml/sarif/junit/html
+// output without the renderer having to look the rule up in the
+// catalog by ID.
 type RuleResult struct {
 	RuleID     string
+	Rule       rules.Rule
 	Status     RuleStatus
 	Finding    *findings.Finding
 	SkipReason string

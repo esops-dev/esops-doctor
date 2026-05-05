@@ -18,6 +18,6 @@ type Finding struct {
 // Command is the concrete `esops` invocation that fixes the underlying
 // condition; DocURL points at upstream documentation.
 type Remediation struct {
-	Command string `yaml:"command"`
-	DocURL  string `yaml:"doc_url"`
+	Command string `yaml:"command" json:"command,omitempty"`
+	DocURL  string `yaml:"doc_url" json:"doc_url,omitempty"`
 }

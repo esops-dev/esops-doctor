@@ -24,6 +24,14 @@ const (
 	SeverityCritical
 )
 
+// Rank returns the integer urgency of s — higher is more urgent. Used
+// by renderers that need to order findings by severity (HTML's
+// sortable column, future sort keys for json/yaml). The value is the
+// raw iota position, kept stable; new severities should land at the
+// existing edges (zero or above critical) rather than between
+// existing ones, or downstream sort orders will silently shift.
+func (s Severity) Rank() int { return int(s) }
+
 // String returns the canonical lowercase rendering. SeverityUnknown
 // renders as "" so a missing-severity loading failure surfaces visibly
 // in error messages rather than silently looking valid.

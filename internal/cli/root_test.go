@@ -340,29 +340,21 @@ func TestValidatorsAcceptValid(t *testing.T) {
 			t.Errorf("validateLogFormat(%q) returned %v", s, err)
 		}
 	}
-	for _, s := range []string{"", "table"} {
+	for _, s := range []string{"", "table", "json", "yaml", "sarif", "junit", "html", "JSON", "SARIF"} {
 		if err := validateOutput(s); err != nil {
 			t.Errorf("validateOutput(%q) returned %v", s, err)
 		}
 	}
 }
 
-// TestValidateOutputRejectsPlannedFormats asserts that --output values
-// CLAUDE.md §10 promises but Milestone 3 hasn't landed yet (json, yaml,
-// sarif, junit, html) fail loudly with a usage error, rather than
-// silently rendering a table. The error message mentions the milestone
-// so an operator who reads CLAUDE.md and tries the format isn't
-// confused about whether they typed it wrong or it's not built yet.
-func TestValidateOutputRejectsPlannedFormats(t *testing.T) {
-	for _, s := range []string{"json", "yaml", "sarif", "junit", "html"} {
-		err := validateOutput(s)
-		if err == nil {
-			t.Errorf("validateOutput(%q) accepted; expected usage error", s)
-			continue
-		}
-		if !strings.Contains(err.Error(), "not yet implemented") {
-			t.Errorf("validateOutput(%q) message = %q, want 'not yet implemented'", s, err)
-		}
+// TestPlannedOutputFormatsIsEmptyOnceAllWired guards the contract that
+// every format CLAUDE.md §10 names is now implemented. If a future
+// change re-introduces a planned-but-unwired format (e.g. for a v2
+// schema), this test is the prompt to also re-introduce a
+// rejects-planned-formats test alongside it.
+func TestPlannedOutputFormatsIsEmptyOnceAllWired(t *testing.T) {
+	if len(plannedOutputFormats) != 0 {
+		t.Errorf("plannedOutputFormats = %v, want empty (every documented format is wired)", plannedOutputFormats)
 	}
 }
 
@@ -372,7 +364,7 @@ func TestValidateOutputRejectsUnknown(t *testing.T) {
 		t.Fatal("validateOutput(\"xml\") accepted; expected usage error")
 	}
 	if strings.Contains(err.Error(), "not yet implemented") {
-		t.Errorf("unknown format should not name Milestone 3; got %q", err)
+		t.Errorf("unknown format should not say 'not yet implemented'; got %q", err)
 	}
 }
 

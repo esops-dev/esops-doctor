@@ -11,3 +11,7 @@ coverage.txt
 .env.*
 !.env.example
 **/esops.log
+# Ad-hoc HTML reports an operator may dump in-tree from
+# `esops-doctor scan --output html > foo.html`. The repo is a Go module —
+# stray .html artefacts shouldn't ride along in commits.
+/*.html

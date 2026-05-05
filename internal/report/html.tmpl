@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>esops-doctor scan{{if .Cluster.Name}} — {{.Cluster.Name}}{{end}}</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #6b6b6b;
+  --border: #e1e4e8;
+  --accent: #0366d6;
+  --critical: #b00020;
+  --error: #d04a02;
+  --warn: #b5800c;
+  --info: #0366d6;
+  --pass: #2e7d32;
+  --skipped: #6b6b6b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --fg: #e6edf3;
+    --muted: #8b949e;
+    --border: #30363d;
+    --accent: #58a6ff;
+    --critical: #ff6b6b;
+    --error: #f0883e;
+    --warn: #d29922;
+    --info: #58a6ff;
+    --pass: #56d364;
+    --skipped: #8b949e;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.wrap { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+header h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
+header .meta { color: var(--muted); margin: 0 0 1rem; font-size: 0.9rem; }
+.counts { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
+.counts .pill {
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  background: transparent;
+}
+.counts .pill.critical { color: var(--critical); border-color: var(--critical); }
+.counts .pill.error    { color: var(--error);    border-color: var(--error); }
+.counts .pill.warn     { color: var(--warn);     border-color: var(--warn); }
+.counts .pill.info     { color: var(--info);     border-color: var(--info); }
+.counts .pill.pass     { color: var(--pass);     border-color: var(--pass); }
+.counts .pill.skipped  { color: var(--skipped);  border-color: var(--skipped); }
+.counts .pill.errored  { color: var(--error);    border-color: var(--error); }
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+.filters fieldset { border: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.filters legend { font-weight: 600; padding-right: 0.5rem; color: var(--muted); }
+.filters label { display: inline-flex; align-items: center; gap: 0.25rem; cursor: pointer; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+thead th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 2px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+thead th[data-sort]:hover { color: var(--accent); }
+thead th[data-sort]::after {
+  content: " ⇅";
+  color: var(--muted);
+  font-size: 0.75em;
+}
+thead th.sort-asc::after  { content: " ↑"; color: var(--accent); }
+thead th.sort-desc::after { content: " ↓"; color: var(--accent); }
+tbody td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+tbody tr.hidden { display: none; }
+.sev { font-weight: 600; text-transform: lowercase; }
+.sev.critical { color: var(--critical); }
+.sev.error    { color: var(--error); }
+.sev.warn     { color: var(--warn); }
+.sev.info     { color: var(--info); }
+.status { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.85em; }
+.status.fail    { color: var(--error); }
+.status.pass    { color: var(--pass); }
+.status.skipped { color: var(--skipped); }
+.status.error   { color: var(--critical); }
+.rule-name { font-weight: 600; }
+.rule-id { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.8em; color: var(--muted); margin-top: 0.1rem; }
+.tags { margin-top: 0.3rem; display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.tag {
+  padding: 0.05rem 0.45rem;
+  font-size: 0.72rem;
+  background: var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+}
+.probe { font-size: 0.8em; color: var(--muted); margin-top: 0.2rem; }
+.probe code { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.about { margin-top: 0.4rem; font-size: 0.85em; color: var(--muted); }
+.about summary { cursor: pointer; user-select: none; }
+.about p { margin: 0.3rem 0 0; white-space: pre-wrap; }
+.remediation a { color: var(--accent); text-decoration: none; }
+.remediation a:hover { text-decoration: underline; }
+.remediation code {
+  display: block;
+  padding: 0.2rem 0.4rem;
+  background: var(--border);
+  border-radius: 3px;
+  font-size: 0.85em;
+  margin-bottom: 0.25rem;
+  word-break: break-word;
+}
+footer.tool-footer {
+  margin-top: 1.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
+}
+footer.tool-footer code { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.empty { padding: 2rem; text-align: center; color: var(--muted); border: 1px dashed var(--border); border-radius: 6px; }
+.filtered-out { padding: 1rem; text-align: center; color: var(--muted); border: 1px dashed var(--border); border-radius: 6px; margin-top: 0.5rem; }
+.filtered-out.hidden { display: none; }
+.filtered-out button { background: transparent; border: 1px solid var(--accent); color: var(--accent); padding: 0.2rem 0.6rem; border-radius: 4px; cursor: pointer; font: inherit; }
+.filtered-out button:hover { background: var(--border); }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>esops-doctor scan</h1>
+  <p class="meta">
+    {{if .Cluster.Name}}<strong>{{.Cluster.Name}}</strong> · {{end}}{{.Cluster.Dialect}}{{if .Cluster.Version}} {{.Cluster.Version}}{{end}}{{if .Cluster.Health}} · health {{.Cluster.Health}}{{end}}{{if .Cluster.NodeCount}} · {{.Cluster.NodeCount}} nodes{{if .Cluster.DataNodeCount}} ({{.Cluster.DataNodeCount}} data){{end}}{{end}}
+    · {{.Scan.RuleCount}} rules · {{.Scan.DurationMs}} ms{{if .Scan.StartedAt}} · {{.Scan.StartedAt}}{{end}}
+  </p>
+  <div class="counts">
+    {{if gt .Summary.BySeverity.Critical 0}}<span class="pill critical">{{.Summary.BySeverity.Critical}} critical</span>{{end}}
+    {{if gt .Summary.BySeverity.Error 0}}<span class="pill error">{{.Summary.BySeverity.Error}} error</span>{{end}}
+    {{if gt .Summary.BySeverity.Warn 0}}<span class="pill warn">{{.Summary.BySeverity.Warn}} warn</span>{{end}}
+    {{if gt .Summary.BySeverity.Info 0}}<span class="pill info">{{.Summary.BySeverity.Info}} info</span>{{end}}
+    <span class="pill pass">{{.Summary.Passed}} passed</span>
+    {{if gt .Summary.Skipped 0}}<span class="pill skipped">{{.Summary.Skipped}} skipped</span>{{end}}
+    {{if gt .Summary.Errored 0}}<span class="pill errored">{{.Summary.Errored}} errored</span>{{end}}
+  </div>
+</header>
+
+{{if .Results}}
+<section class="filters" id="filters">
+  <fieldset>
+    <legend>Status</legend>
+    <label><input type="checkbox" data-filter="status" value="fail" checked> fail</label>
+    <label><input type="checkbox" data-filter="status" value="error" checked> error</label>
+    <label><input type="checkbox" data-filter="status" value="skipped" checked> skipped</label>
+    <label><input type="checkbox" data-filter="status" value="pass"{{if not (or .Summary.Failed .Summary.Errored .Summary.Skipped)}} checked{{end}}> pass</label>
+  </fieldset>
+  <fieldset>
+    <legend>Severity</legend>
+    <label><input type="checkbox" data-filter="severity" value="critical" checked> critical</label>
+    <label><input type="checkbox" data-filter="severity" value="error" checked> error</label>
+    <label><input type="checkbox" data-filter="severity" value="warn" checked> warn</label>
+    <label><input type="checkbox" data-filter="severity" value="info" checked> info</label>
+    <label><input type="checkbox" data-filter="severity" value="" checked> n/a</label>
+  </fieldset>
+</section>
+
+<table id="results">
+  <thead>
+    <tr>
+      <th data-sort="status">Status</th>
+      <th data-sort="severity">Severity</th>
+      <th data-sort="rule">Rule</th>
+      <th data-sort="category">Category</th>
+      <th>Message</th>
+      <th>Remediation</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Results}}
+    <tr data-status="{{.Status}}" data-severity="{{.Severity}}">
+      <td class="status {{.Status}}" data-sort-value="{{statusRank .Status}}">{{.Status}}</td>
+      <td class="sev {{.Severity}}" data-sort-value="{{severityRank .Severity}}">{{or .Severity "—"}}</td>
+      <td class="rule">
+        <div class="rule-name">{{or .Name .RuleID}}</div>
+        <div class="rule-id">{{.RuleID}}</div>
+        {{if .Tags}}<div class="tags">{{range .Tags}}<span class="tag">{{.}}</span>{{end}}</div>{{end}}
+      </td>
+      <td>
+        <div>{{or .Category "—"}}</div>
+        {{if .Probe}}<div class="probe">probe: <code>{{.Probe}}</code></div>{{end}}
+      </td>
+      <td>
+        {{if .Message}}{{.Message}}{{else if .SkipReason}}<em>{{.SkipReason}}</em>{{else if .Error}}<em>{{.Error}}</em>{{else}}—{{end}}
+        {{if .Description}}<details class="about"><summary>about this rule</summary><p>{{.Description}}</p></details>{{end}}
+      </td>
+      <td class="remediation">
+        {{if .Remediation}}
+          {{if .Remediation.Command}}<code>{{.Remediation.Command}}</code>{{end}}
+          {{if .Remediation.DocURL}}<a href="{{.Remediation.DocURL}}" rel="noopener noreferrer" target="_blank">docs</a>{{end}}
+        {{else}}—{{end}}
+      </td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+<div id="filtered-out" class="filtered-out hidden">
+  All <span id="hidden-count">0</span> rows are hidden by the active filters above.
+  <button type="button" id="show-all">Show all rules</button>
+</div>
+{{else}}
+<div class="empty">No per-rule results to show.</div>
+{{end}}
+
+<footer class="tool-footer">
+  {{.Tool.Name}} <code>{{.Tool.Version}}</code>{{if .Tool.Commit}} · commit <code>{{.Tool.Commit}}</code>{{end}}{{if .Tool.EsopsModule}} · esops-go {{.Tool.EsopsModule}}{{end}}{{if .Scan.StartedAt}} · scan started {{.Scan.StartedAt}}{{end}}
+</footer>
+</div>
+
+<script>
+(function () {
+  // Sort: clicking a sortable header toggles asc/desc and reorders rows.
+  // Cells may carry data-sort-value for numeric ranking (severity,
+  // status); fallback is the cell's text content.
+  document.querySelectorAll("thead th[data-sort]").forEach(function (th) {
+    th.addEventListener("click", function () {
+      var table = th.closest("table");
+      var tbody = table.querySelector("tbody");
+      var idx = Array.prototype.indexOf.call(th.parentNode.children, th);
+      var asc = !th.classList.contains("sort-asc");
+      table.querySelectorAll("thead th").forEach(function (h) { h.classList.remove("sort-asc", "sort-desc"); });
+      th.classList.add(asc ? "sort-asc" : "sort-desc");
+      var rows = Array.prototype.slice.call(tbody.querySelectorAll("tr"));
+      rows.sort(function (a, b) {
+        var av = a.cells[idx].dataset.sortValue || a.cells[idx].textContent.trim();
+        var bv = b.cells[idx].dataset.sortValue || b.cells[idx].textContent.trim();
+        var anum = parseFloat(av), bnum = parseFloat(bv);
+        if (!isNaN(anum) && !isNaN(bnum)) { return asc ? anum - bnum : bnum - anum; }
+        return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+      });
+      rows.forEach(function (r) { tbody.appendChild(r); });
+    });
+  });
+
+  // Filter: any checkbox change re-applies the visible row set.
+  // Each filter group keeps the row visible only if the row's
+  // data-attribute value is in the set of checked values.
+  function applyFilters() {
+    var groups = {};
+    document.querySelectorAll("input[type=checkbox][data-filter]").forEach(function (cb) {
+      var key = cb.dataset.filter;
+      if (!groups[key]) groups[key] = new Set();
+      if (cb.checked) groups[key].add(cb.value);
+    });
+    var rows = document.querySelectorAll("tbody tr");
+    var hidden = 0;
+    rows.forEach(function (row) {
+      var visible = true;
+      Object.keys(groups).forEach(function (key) {
+        var v = row.dataset[key] || "";
+        if (!groups[key].has(v)) visible = false;
+      });
+      row.classList.toggle("hidden", !visible);
+      if (!visible) hidden++;
+    });
+    // Reveal the empty-state hint only when the filter hides every
+    // row in a non-empty result set — without it a clean scan with
+    // pass unchecked silently shows an empty table.
+    var hint = document.getElementById("filtered-out");
+    if (hint) {
+      var allHidden = rows.length > 0 && hidden === rows.length;
+      hint.classList.toggle("hidden", !allHidden);
+      var counter = document.getElementById("hidden-count");
+      if (counter) counter.textContent = hidden;
+    }
+  }
+  document.querySelectorAll("input[type=checkbox][data-filter]").forEach(function (cb) {
+    cb.addEventListener("change", applyFilters);
+  });
+  var showAll = document.getElementById("show-all");
+  if (showAll) {
+    showAll.addEventListener("click", function () {
+      document.querySelectorAll("input[type=checkbox][data-filter]").forEach(function (cb) {
+        cb.checked = true;
+      });
+      applyFilters();
+    });
+  }
+  applyFilters();
+})();
+</script>
+</body>
+</html>

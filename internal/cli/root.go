@@ -46,12 +46,6 @@ func newRoot() *cli.Command {
 // --cacert / --insecure / --output match the esops surface; --quiet and
 // --summary-only are doctor-specific report-shaping flags. --log-file
 // mirrors esops so an operator can pin doctor's logs to disk in CI.
-//
-// --url, --cacert, --insecure, --output, --summary-only are registered
-// here so subcommands inherit them, but they are not consumed yet. The
-// future cluster-touching path (cmdsetup) will read --url/--cacert/
-// --insecure to layer overrides on the resolved context, and the report
-// layer will read --output/--summary-only/--quiet to shape stdout.
 func globalFlags() []cli.Flag {
 	return []cli.Flag{
 		&cli.StringFlag{
@@ -112,13 +106,13 @@ func globalFlags() []cli.Flag {
 // then, passing the format value silently fell through to a table —
 // which CLAUDE.md §10 explicitly warns against ("scriptable" formats
 // must be honoured exactly). Better to reject loudly with exit 2.
-var implementedOutputFormats = []string{"table"}
+var implementedOutputFormats = []string{"table", "json", "yaml", "sarif", "junit", "html"}
 
 // plannedOutputFormats lists the formats CLAUDE.md §10 promises but
-// have not landed yet (Milestone 3). Listed separately so the error
-// message tells the operator the format is *known* but not yet wired,
-// rather than rejected as a typo.
-var plannedOutputFormats = []string{"json", "yaml", "sarif", "junit", "html"}
+// have not landed yet. Listed separately so the error message tells
+// the operator the format is *known* but not yet wired, rather than
+// rejected as a typo. Empty for now: every format §10 names is wired.
+var plannedOutputFormats = []string{}
 
 func validateOutput(s string) error {
 	if s == "" {
@@ -131,7 +125,7 @@ func validateOutput(s string) error {
 	}
 	for _, v := range plannedOutputFormats {
 		if strings.EqualFold(s, v) {
-			return exit.Usage("--output %q is documented but not yet implemented (Milestone 3); only %s is wired today",
+			return exit.Usage("--output %q is documented but not yet implemented; only %s is wired today",
 				s, strings.Join(implementedOutputFormats, ", "))
 		}
 	}
@@ -164,6 +158,11 @@ func validateLogFormat(s string) error {
 // to exit code 2.
 func initLogger(ctx context.Context, cmd *cli.Command) (context.Context, error) {
 	defaults := readDefaults(cmd.String("config"))
+	// Stash the parsed defaults on ctx so subcommands (runScan) don't
+	// re-walk the config search path and re-parse the YAML for their
+	// own defaults lookup. Single-shot CLI doesn't need much, but the
+	// double-parse showed up under -race and is trivial to avoid.
+	ctx = withDefaults(ctx, defaults)
 	level := resolveLogLevel(cmd, defaults.LogLevel)
 	format := resolveSetting(cmd, "log-format", defaults.LogFormat, defaultLogFormat())
 	logFile := resolveSetting(cmd, "log-file", defaults.LogFile, "")
@@ -176,6 +175,25 @@ func initLogger(ctx context.Context, cmd *cli.Command) (context.Context, error) 
 		"log_file", logFile,
 	)
 	return ctx, nil
+}
+
+// defaultsKey is the unexported key the Before hook uses to stash the
+// parsed config defaults on the context. Subcommands read it via
+// defaultsFrom; they never re-parse the file themselves.
+type defaultsKey struct{}
+
+func withDefaults(ctx context.Context, d config.Defaults) context.Context {
+	return context.WithValue(ctx, defaultsKey{}, d)
+}
+
+// defaultsFrom returns the config defaults the Before hook stashed on
+// ctx. Falls back to a zero Defaults when nothing was stashed (so
+// callers that build a Command without going through Run still work).
+func defaultsFrom(ctx context.Context) config.Defaults {
+	if d, ok := ctx.Value(defaultsKey{}).(config.Defaults); ok {
+		return d
+	}
+	return config.Defaults{}
 }
 
 // readDefaults loads the config file quietly for the Before hook. Returns
@@ -240,7 +258,7 @@ func resolveOutput(cmd *cli.Command, fromConfig string) (string, error) {
 	}
 	for _, v := range plannedOutputFormats {
 		if strings.EqualFold(picked, v) {
-			return "", exit.Usage("output %q is documented but not yet implemented (Milestone 3); only %s is wired today",
+			return "", exit.Usage("output %q is documented but not yet implemented; only %s is wired today",
 				picked, strings.Join(implementedOutputFormats, ", "))
 		}
 	}

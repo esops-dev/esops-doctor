@@ -3,9 +3,12 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
+
+	yaml "go.yaml.in/yaml/v3"
 
 	"github.com/esops-dev/esops-go/pkg/client"
 	"github.com/esops-dev/esops-go/pkg/config"
@@ -166,6 +169,228 @@ func TestScanFailingFindingExitsTwenty(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "heap_size") {
 		t.Errorf("stdout should include the failing rule id; got %q", stdout.String())
+	}
+}
+
+// TestScanJSONOutput exercises the json renderer end-to-end through the
+// scan command: stub a healthy cluster, run with --output json, and
+// confirm the bytes are valid JSON carrying the documented schema. The
+// renderer's own tests cover field-by-field shape — this test's job is
+// to prove the cli wired the format flag through to report.Render.
+func TestScanJSONOutput(t *testing.T) {
+	const gb = int64(1024 * 1024 * 1024)
+	healthy := types.NodeStats{
+		Name: "n1",
+		JVM:  types.NodeJVMStats{Heap: types.NodeJVMHeap{InitBytes: 8 * gb, MaxBytes: 8 * gb}},
+		OS:   types.NodeOSStats{TotalPhysicalMemoryBytes: 32 * gb},
+	}
+	stubConnect(t, &client.Client{
+		Info:      types.ClusterInfo{Dialect: types.DialectElasticsearch, ClusterName: "prod-eu", Version: "9.0.0"},
+		NodeStats: &fakeNodeStatsInspector{Result: []types.NodeStats{healthy}},
+	})
+
+	var stdout bytes.Buffer
+	root := newRoot()
+	root.Writer = &stdout
+	if err := root.Run(context.Background(), []string{
+		"esops-doctor", "scan", "--output", "json", "--url", "http://example.invalid",
+	}); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+
+	var doc struct {
+		SchemaVersion int `json:"schema_version"`
+		Cluster       struct {
+			Name    string `json:"name"`
+			Dialect string `json:"dialect"`
+		} `json:"cluster"`
+		Summary struct {
+			Passed int `json:"passed"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &doc); err != nil {
+		t.Fatalf("not valid json: %v\n%s", err, stdout.String())
+	}
+	if doc.SchemaVersion != 1 {
+		t.Errorf("schema_version = %d, want 1", doc.SchemaVersion)
+	}
+	if doc.Cluster.Name != "prod-eu" || doc.Cluster.Dialect != "elasticsearch" {
+		t.Errorf("cluster = %+v", doc.Cluster)
+	}
+	if doc.Summary.Passed != 1 {
+		t.Errorf("summary.passed = %d, want 1", doc.Summary.Passed)
+	}
+}
+
+// TestScanYAMLOutput is the YAML twin of TestScanJSONOutput: same
+// scenario, different format, asserts the wire shape round-trips.
+func TestScanYAMLOutput(t *testing.T) {
+	const gb = int64(1024 * 1024 * 1024)
+	healthy := types.NodeStats{
+		Name: "n1",
+		JVM:  types.NodeJVMStats{Heap: types.NodeJVMHeap{InitBytes: 8 * gb, MaxBytes: 8 * gb}},
+		OS:   types.NodeOSStats{TotalPhysicalMemoryBytes: 32 * gb},
+	}
+	stubConnect(t, &client.Client{
+		Info:      types.ClusterInfo{Dialect: types.DialectElasticsearch, ClusterName: "prod-eu", Version: "9.0.0"},
+		NodeStats: &fakeNodeStatsInspector{Result: []types.NodeStats{healthy}},
+	})
+
+	var stdout bytes.Buffer
+	root := newRoot()
+	root.Writer = &stdout
+	if err := root.Run(context.Background(), []string{
+		"esops-doctor", "scan", "--output", "yaml", "--url", "http://example.invalid",
+	}); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+
+	var doc struct {
+		SchemaVersion int `yaml:"schema_version"`
+		Cluster       struct {
+			Dialect string `yaml:"dialect"`
+		} `yaml:"cluster"`
+	}
+	if err := yaml.Unmarshal(stdout.Bytes(), &doc); err != nil {
+		t.Fatalf("not valid yaml: %v\n%s", err, stdout.String())
+	}
+	if doc.SchemaVersion != 1 {
+		t.Errorf("schema_version = %d, want 1", doc.SchemaVersion)
+	}
+	if doc.Cluster.Dialect != "elasticsearch" {
+		t.Errorf("cluster.dialect = %q", doc.Cluster.Dialect)
+	}
+}
+
+// TestScanSARIFOutput exercises the sarif renderer end-to-end through
+// the scan command: stub a healthy cluster, run with --output sarif,
+// and confirm the bytes are valid SARIF 2.1.0 carrying the tool
+// driver block. The renderer's own tests cover field-by-field shape;
+// this test's job is to prove the cli wired the format flag through.
+func TestScanSARIFOutput(t *testing.T) {
+	const gb = int64(1024 * 1024 * 1024)
+	healthy := types.NodeStats{
+		Name: "n1",
+		JVM:  types.NodeJVMStats{Heap: types.NodeJVMHeap{InitBytes: 8 * gb, MaxBytes: 8 * gb}},
+		OS:   types.NodeOSStats{TotalPhysicalMemoryBytes: 32 * gb},
+	}
+	stubConnect(t, &client.Client{
+		Info:      types.ClusterInfo{Dialect: types.DialectElasticsearch, ClusterName: "prod-eu", Version: "9.0.0"},
+		NodeStats: &fakeNodeStatsInspector{Result: []types.NodeStats{healthy}},
+	})
+
+	var stdout bytes.Buffer
+	root := newRoot()
+	root.Writer = &stdout
+	if err := root.Run(context.Background(), []string{
+		"esops-doctor", "scan", "--output", "sarif", "--url", "http://example.invalid",
+	}); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+
+	var doc map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &doc); err != nil {
+		t.Fatalf("not valid sarif json: %v\n%s", err, stdout.String())
+	}
+	if doc["version"] != "2.1.0" {
+		t.Errorf("sarif.version = %v, want 2.1.0", doc["version"])
+	}
+	runs, _ := doc["runs"].([]any)
+	if len(runs) != 1 {
+		t.Fatalf("expected 1 run, got %d", len(runs))
+	}
+	driver := runs[0].(map[string]any)["tool"].(map[string]any)["driver"].(map[string]any)
+	if driver["name"] != "esops-doctor" {
+		t.Errorf("driver.name = %v, want esops-doctor", driver["name"])
+	}
+}
+
+// TestScanJUnitOutput is the JUnit twin of TestScanSARIFOutput: same
+// scenario, different format, asserts the wire shape parses.
+func TestScanJUnitOutput(t *testing.T) {
+	const gb = int64(1024 * 1024 * 1024)
+	healthy := types.NodeStats{
+		Name: "n1",
+		JVM:  types.NodeJVMStats{Heap: types.NodeJVMHeap{InitBytes: 8 * gb, MaxBytes: 8 * gb}},
+		OS:   types.NodeOSStats{TotalPhysicalMemoryBytes: 32 * gb},
+	}
+	stubConnect(t, &client.Client{
+		Info:      types.ClusterInfo{Dialect: types.DialectElasticsearch, ClusterName: "prod-eu", Version: "9.0.0"},
+		NodeStats: &fakeNodeStatsInspector{Result: []types.NodeStats{healthy}},
+	})
+
+	var stdout bytes.Buffer
+	root := newRoot()
+	root.Writer = &stdout
+	if err := root.Run(context.Background(), []string{
+		"esops-doctor", "scan", "--output", "junit", "--url", "http://example.invalid",
+	}); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	out := stdout.String()
+	if !strings.HasPrefix(out, `<?xml version="1.0"`) {
+		t.Errorf("junit output should start with XML header; got %.40q", out)
+	}
+	for _, want := range []string{
+		`<testsuites`, `<testsuite`, `<testcase`, `name="heap_size"`, `tests="1"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("junit output missing %q\nfull output:\n%s", want, out)
+		}
+	}
+}
+
+// TestScanHTMLOutput exercises the html renderer end-to-end through
+// the scan command. The renderer's own tests cover well-formedness;
+// this test's job is to prove the cli wired the format through and
+// that the document carries cluster identity in the page chrome.
+func TestScanHTMLOutput(t *testing.T) {
+	const gb = int64(1024 * 1024 * 1024)
+	healthy := types.NodeStats{
+		Name: "n1",
+		JVM:  types.NodeJVMStats{Heap: types.NodeJVMHeap{InitBytes: 8 * gb, MaxBytes: 8 * gb}},
+		OS:   types.NodeOSStats{TotalPhysicalMemoryBytes: 32 * gb},
+	}
+	stubConnect(t, &client.Client{
+		Info:      types.ClusterInfo{Dialect: types.DialectElasticsearch, ClusterName: "prod-eu", Version: "9.0.0"},
+		NodeStats: &fakeNodeStatsInspector{Result: []types.NodeStats{healthy}},
+	})
+
+	var stdout bytes.Buffer
+	root := newRoot()
+	root.Writer = &stdout
+	if err := root.Run(context.Background(), []string{
+		"esops-doctor", "scan", "--output", "html", "--url", "http://example.invalid",
+	}); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"<!DOCTYPE html>",
+		"<title>esops-doctor scan",
+		"prod-eu",
+		"elasticsearch 9.0.0",
+		"heap_size",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("html output missing %q\nfull output (truncated):\n%.500s", want, out)
+		}
+	}
+}
+
+// TestScanRejectsUnknownFormat confirms a value not in the known
+// format set fails fast with exit 2 (usage), not exit 1 (generic).
+// `xml` is a plausible typo for `yaml` — it must be caught before any
+// cluster work happens.
+func TestScanRejectsUnknownFormat(t *testing.T) {
+	err := Run(context.Background(), []string{
+		"esops-doctor", "scan", "--output", "xml", "--url", "http://example.invalid",
+	})
+	if err == nil {
+		t.Fatal("expected usage error for --output xml")
+	}
+	if got := exit.Code(err); got != 2 {
+		t.Errorf("exit code = %d, want 2; err=%v", got, err)
 	}
 }
 

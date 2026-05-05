@@ -20,6 +20,7 @@ import (
 	"github.com/esops-dev/esops-doctor/internal/probes"
 	"github.com/esops-dev/esops-doctor/internal/report"
 	"github.com/esops-dev/esops-doctor/internal/rules"
+	"github.com/esops-dev/esops-doctor/internal/version"
 )
 
 // connectFn is the seam scan tests use to bypass the real cluster.
@@ -83,13 +84,9 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 		return exit.Usage("%s", err.Error())
 	}
 
-	defaults := readDefaults(cmd.String("config"))
-	if _, err := resolveOutput(cmd, defaults.Output); err != nil {
-		// Only `table` lands today; the resolver's job is to fail
-		// closed on a defaults.output value pointing at an
-		// unimplemented format. The actual format string is unused
-		// because the renderer is hard-coded — wire the switch when
-		// Milestone 3 lands.
+	defaults := defaultsFrom(ctx)
+	format, err := resolveOutput(cmd, defaults.Output)
+	if err != nil {
 		return err
 	}
 
@@ -111,6 +108,13 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 		return exit.Catalog("compiling rules: %s", err)
 	}
 
+	// scanStart is the operator-facing "when the scan ran" timestamp:
+	// the moment we begin reaching out to the cluster. duration below
+	// measures only the engine phase (prefetch + evaluate) because
+	// that's the cost-relevant number for catalog-growth triage; CLI
+	// startup and connect are bounded by other timeouts.
+	scanStart := time.Now()
+
 	logging.Logger().Info("doctor.scan.connect", "addresses", ctxCfg.Addresses())
 	cl, err := connectFn(ctx, ctxCfg)
 	if err != nil {
@@ -119,19 +123,43 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 	dialect := string(cl.Info.Dialect)
 
 	registry := probes.New(cl)
-	start := time.Now()
-	results := eng.Evaluate(ctx, registry, dialect)
-	duration := time.Since(start)
+
+	// Fetch cluster posture (status, node counts) for the report
+	// Header before the engine runs. Best-effort: an error here does
+	// not fail the scan — the report just renders without the cluster
+	// posture fields. Until parallel probe fetching lands this
+	// duplicates the call any rule using cluster_health makes.
+	healthSummary, healthErr := probes.FetchHealthSummary(ctx, cl)
+	if healthErr != nil {
+		logging.Logger().Debug("doctor.scan.health_summary.failed", "err", healthErr)
+	}
+
+	evalStart := time.Now()
+	// Pre-fetch every applicable probe in parallel so the engine can
+	// evaluate from cache rather than serialise round trips. Bounded
+	// concurrency (DefaultPrefetchConcurrency, currently 4) keeps the
+	// cluster from being hit too hard on slow links.
+	cache := eng.Prefetch(ctx, registry, dialect, 0)
+	results := eng.EvaluateWithCache(ctx, registry, dialect, cache)
+	duration := time.Since(evalStart)
 
 	logRuleTimings(results)
 
 	header := report.Header{
-		ClusterName: cl.Info.ClusterName,
-		Dialect:     dialect,
-		Version:     cl.Info.Version,
-		Duration:    duration,
+		ClusterName:     cl.Info.ClusterName,
+		Dialect:         dialect,
+		Version:         cl.Info.Version,
+		Health:          healthSummary.Status,
+		NodeCount:       healthSummary.NumberOfNodes,
+		DataNodeCount:   healthSummary.NumberOfDataNodes,
+		StartedAt:       scanStart,
+		Duration:        duration,
+		ToolName:        "esops-doctor",
+		ToolVersion:     version.Version,
+		ToolCommit:      version.Commit,
+		ToolEsopsModule: version.EsopsModule,
 	}
-	if err := report.Table(stdout, header, results, report.TableOptions{
+	if err := report.Render(format, stdout, header, results, report.Options{
 		SummaryOnly: cmd.Bool("summary-only"),
 		Quiet:       cmd.Bool("quiet"),
 	}); err != nil {
