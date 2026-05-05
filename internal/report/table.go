@@ -22,11 +22,28 @@ import (
 // time the engine took. The fields are filled by the cli before the
 // table is emitted so a captured log line on a busy oncall channel
 // stays interpretable on its own.
+//
+// The Tool* and cluster-health fields are read by the json/yaml/sarif/
+// junit/html renderers via Document; the table renderer only needs
+// ClusterName/Dialect/Version/Duration. Filling the extra fields is
+// optional — empty values are omitted from structured output, and the
+// table renderer ignores them.
 type Header struct {
 	ClusterName string
 	Dialect     string
 	Version     string
-	Duration    time.Duration
+
+	Health        string
+	NodeCount     int
+	DataNodeCount int
+
+	StartedAt time.Time
+	Duration  time.Duration
+
+	ToolName        string
+	ToolVersion     string
+	ToolCommit      string
+	ToolEsopsModule string
 }
 
 // TableOptions tunes the renderer's verbosity.

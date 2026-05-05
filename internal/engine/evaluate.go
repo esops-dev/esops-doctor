@@ -12,6 +12,19 @@ import (
 	"github.com/esops-dev/esops-doctor/internal/rules"
 )
 
+// ProbeCacheEntry is one cached probe result. Exported so callers can
+// pre-populate it via Prefetch and pass it into EvaluateWithCache,
+// turning the engine's per-rule lazy fetch into a parallel pre-fetch.
+type ProbeCacheEntry struct {
+	Data any
+	Err  error
+}
+
+// ProbeCache is the engine's per-evaluation cache, keyed by probe
+// name. A nil cache passed to EvaluateWithCache is equivalent to
+// Evaluate (lazy fan-in fetching).
+type ProbeCache map[string]ProbeCacheEntry
+
 // Evaluate runs every compiled rule against the probe registry. The
 // dialect parameter is the probed cluster's dialect ("elasticsearch"
 // or "opensearch"); rules whose dialects list does not include it are
@@ -22,13 +35,31 @@ import (
 // error. ctx is propagated to both ProbeRegistry.Probe and
 // cel.Program.ContextEval, so cancellation kills an in-flight scan
 // promptly.
+//
+// For parallel pre-fetching call Prefetch first and pass the result
+// to EvaluateWithCache; this method is the lazy-fetch convenience.
 func (e *Engine) Evaluate(ctx context.Context, registry ProbeRegistry, dialect string) []RuleResult {
-	cache := map[string]probeCacheEntry{}
+	return e.EvaluateWithCache(ctx, registry, dialect, nil)
+}
+
+// EvaluateWithCache is Evaluate with a pre-populated probe cache.
+// Cache entries are reused as-is (including their errors); probes
+// missing from the cache fall back to the lazy fetch path.
+//
+// Pre-populating the cache via Prefetch parallelises the
+// network-bound part of a scan: a 25-rule catalog hitting 12 unique
+// probes goes from 12 sequential round trips to one fan-out batch
+// bounded by Prefetch's concurrency limit.
+func (e *Engine) EvaluateWithCache(ctx context.Context, registry ProbeRegistry, dialect string, cache ProbeCache) []RuleResult {
+	if cache == nil {
+		cache = ProbeCache{}
+	}
 	results := make([]RuleResult, 0, len(e.rules))
 	for _, cr := range e.rules {
 		if err := ctx.Err(); err != nil {
 			results = append(results, RuleResult{
 				RuleID: cr.rule.ID,
+				Rule:   cr.rule,
 				Status: RuleStatusError,
 				Err:    err,
 			})
@@ -39,14 +70,9 @@ func (e *Engine) Evaluate(ctx context.Context, registry ProbeRegistry, dialect s
 	return results
 }
 
-type probeCacheEntry struct {
-	data any
-	err  error
-}
-
-func evalOne(ctx context.Context, cr compiledRule, registry ProbeRegistry, dialect string, cache map[string]probeCacheEntry) RuleResult {
+func evalOne(ctx context.Context, cr compiledRule, registry ProbeRegistry, dialect string, cache ProbeCache) RuleResult {
 	start := time.Now()
-	res := RuleResult{RuleID: cr.rule.ID}
+	res := RuleResult{RuleID: cr.rule.ID, Rule: cr.rule}
 	defer func() { res.Duration = time.Since(start) }()
 
 	if !ruleSupportsDialect(cr.rule, dialect) {
@@ -59,27 +85,27 @@ func evalOne(ctx context.Context, cr compiledRule, registry ProbeRegistry, diale
 	entry, ok := cache[cr.rule.Probe]
 	if !ok {
 		data, err := registry.Probe(ctx, cr.rule.Probe)
-		entry = probeCacheEntry{data: data, err: err}
+		entry = ProbeCacheEntry{Data: data, Err: err}
 		cache[cr.rule.Probe] = entry
 	}
-	if entry.err != nil {
-		if errors.Is(entry.err, ErrProbeNotFound) {
+	if entry.Err != nil {
+		if errors.Is(entry.Err, ErrProbeNotFound) {
 			res.Status = RuleStatusSkipped
 			res.SkipReason = fmt.Sprintf("probe %q not registered", cr.rule.Probe)
 			return res
 		}
-		if errors.Is(entry.err, ErrProbeNotApplicable) {
+		if errors.Is(entry.Err, ErrProbeNotApplicable) {
 			res.Status = RuleStatusSkipped
 			res.SkipReason = fmt.Sprintf("probe %q not applicable on dialect %q: %s",
-				cr.rule.Probe, dialect, entry.err)
+				cr.rule.Probe, dialect, entry.Err)
 			return res
 		}
 		res.Status = RuleStatusError
-		res.Err = fmt.Errorf("fetching probe %q: %w", cr.rule.Probe, entry.err)
+		res.Err = fmt.Errorf("fetching probe %q: %w", cr.rule.Probe, entry.Err)
 		return res
 	}
 
-	out, _, err := cr.prog.ContextEval(ctx, map[string]any{"self": entry.data})
+	out, _, err := cr.prog.ContextEval(ctx, map[string]any{"self": entry.Data})
 	if err != nil {
 		res.Status = RuleStatusError
 		res.Err = fmt.Errorf("evaluating: %w", err)
@@ -102,7 +128,7 @@ func evalOne(ctx context.Context, cr compiledRule, registry ProbeRegistry, diale
 		Name:        cr.rule.Name,
 		Severity:    cr.rule.Severity,
 		Category:    cr.rule.Category,
-		Message:     renderMessage(cr.rule.Message, entry.data),
+		Message:     renderMessage(cr.rule.Message, entry.Data),
 		Remediation: cr.rule.Remediation,
 		Dialect:     dialect,
 	}
