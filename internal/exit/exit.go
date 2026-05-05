@@ -21,6 +21,12 @@ import (
 // front of the human-readable message.
 var ErrUsage = errors.New("usage error")
 
+// ErrCatalog is the marker for rule-catalog load and validate failures.
+// Per §10 of CLAUDE.md these map to exit code 21 — distinct from the
+// findings-threshold exit (20) so CI can tell "rules broken" apart from
+// "rules ran and flagged something".
+var ErrCatalog = errors.New("rule catalog error")
+
 // Code returns the documented exit code for err. Sentinels in this
 // package take priority; context.Canceled (SIGINT/SIGTERM) maps to 130
 // because we can't tell which signal fired from the cancelled context
@@ -34,6 +40,8 @@ func Code(err error) int {
 		return 0
 	case errors.Is(err, ErrUsage):
 		return 2
+	case errors.Is(err, ErrCatalog):
+		return 21
 	case errors.Is(err, context.Canceled):
 		return 130
 	default:
@@ -66,6 +74,17 @@ type usageError struct{ msg string }
 
 func (e *usageError) Error() string        { return e.msg }
 func (e *usageError) Is(target error) bool { return target == ErrUsage }
+
+// Catalog returns a catalog error with the formatted message. Matches
+// errors.Is(err, ErrCatalog) without prefixing the user-facing message.
+func Catalog(format string, args ...any) error {
+	return &catalogError{msg: fmt.Sprintf(format, args...)}
+}
+
+type catalogError struct{ msg string }
+
+func (e *catalogError) Error() string        { return e.msg }
+func (e *catalogError) Is(target error) bool { return target == ErrCatalog }
 
 // Silent wraps err so the binary skips printing it to stderr. Used for
 // errors that the underlying library (urfave/cli) already wrote — without

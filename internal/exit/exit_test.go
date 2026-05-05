@@ -50,6 +50,23 @@ func TestCodeOther(t *testing.T) {
 	}
 }
 
+func TestCodeCatalog(t *testing.T) {
+	if got := Code(ErrCatalog); got != 21 {
+		t.Errorf("Code(ErrCatalog) = %d, want 21", got)
+	}
+	err := Catalog("rule %q broke", "x")
+	if !errors.Is(err, ErrCatalog) {
+		t.Error("Catalog() error should match ErrCatalog")
+	}
+	if got := Code(err); got != 21 {
+		t.Errorf("Code(Catalog) = %d, want 21", got)
+	}
+	wrapped := fmt.Errorf("loading: %w", err)
+	if got := Code(wrapped); got != 21 {
+		t.Errorf("Code(wrapped Catalog) = %d, want 21", got)
+	}
+}
+
 func TestSignalCode(t *testing.T) {
 	cases := []struct {
 		sig  os.Signal

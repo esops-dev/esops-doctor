@@ -20,16 +20,17 @@ ceremony.
 
 ## Installation
 
-```sh
-# Homebrew
-brew install esops-dev/tap/esops-doctor
+Pre-built binaries are attached to every
+[GitHub release](https://github.com/esops-dev/esops-doctor/releases):
 
-# Go
-go install github.com/esops-dev/esops-doctor/cmd/esops-doctor@latest
+- Archives for `linux/amd64`, `linux/arm64`, `darwin/amd64`,
+  `darwin/arm64`, and `windows/amd64`.
+- `.deb` and `.rpm` packages for Linux distributions.
+- Cosign signatures and SBOMs (CycloneDX + SPDX) alongside each
+  artifact.
 
-# Linux packages (deb / rpm) and signed archives are attached to each
-# GitHub release.
-```
+Download the archive for your platform, verify the signature, extract,
+and place `esops-doctor` somewhere on your `$PATH`.
 
 ## Quick start
 
