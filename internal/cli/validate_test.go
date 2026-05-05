@@ -170,6 +170,43 @@ func TestValidateRulesSkipsCELOnSchemaErrors(t *testing.T) {
 	}
 }
 
+func TestValidateRulesRejectsUnknownProbe(t *testing.T) {
+	// Schema is valid; CEL is fine; but the probe name has no
+	// registered adapter. Asserts ValidateProbes is wired in and
+	// fires before CEL compile so an operator who renamed a probe
+	// in YAML sees a clear "unknown probe" message rather than a
+	// surprise scan-time skip.
+	dir := t.TempDir()
+	body := []byte(`checks:
+  - id: bogus_probe
+    name: Bogus
+    category: x
+    severity: warn
+    description: rule whose probe is not registered
+    probe: not_a_real_probe
+    condition: "true"
+    message: m
+    dialects: [elasticsearch]
+`)
+	if err := os.WriteFile(filepath.Join(dir, "bad.yaml"), body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	err := runValidateRules(&out, &errOut, dir)
+	if err == nil {
+		t.Fatal("expected unknown-probe error to surface")
+	}
+	if !errors.Is(err, exit.ErrCatalog) {
+		t.Errorf("err should match ErrCatalog (exit 21); got %v", err)
+	}
+	if !strings.Contains(errOut.String(), "unknown probe") {
+		t.Errorf("stderr should mention unknown probe; got %q", errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "not_a_real_probe") {
+		t.Errorf("stderr should reference the bad probe name; got %q", errOut.String())
+	}
+}
+
 func TestValidateRulesEndToEnd(t *testing.T) {
 	// Drives the command through the urfave entry point, exercising
 	// global flags + Before hook on the way to the action. Skipping

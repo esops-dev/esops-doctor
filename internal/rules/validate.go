@@ -64,8 +64,8 @@ var (
 //
 // What this layer does NOT check (deferred):
 //   - CEL expression compilation — owned by the engine package
-//   - probe-name resolution against a registered probe — owned by the
-//     probe package
+//   - probe-name resolution against a registered probe — see
+//     ValidateProbes, which the cli runs alongside this method
 //
 // Both deferred checks land when their owning packages exist; gating
 // validate-rules on packages that don't exist yet would force premature
@@ -101,6 +101,31 @@ func (c *Catalog) Validate() []ValidationError {
 			} else {
 				seen[alias] = r.Source
 			}
+		}
+	}
+	return errs
+}
+
+// ValidateProbes reports rules whose `probe:` field names an adapter
+// the engine cannot serve. The predicate is supplied by the caller so
+// the rules package stays free of upstream-capability knowledge: the
+// cli wires this to probes.IsKnown.
+//
+// Rules with an empty Probe are skipped here — Validate already reports
+// "probe is required" for those, and stacking a second error on the
+// same field is just noise.
+func (c *Catalog) ValidateProbes(known func(string) bool) []ValidationError {
+	var errs []ValidationError
+	for _, r := range c.Rules {
+		if r.Probe == "" {
+			continue
+		}
+		if !known(r.Probe) {
+			errs = append(errs, ValidationError{
+				Source:  r.Source,
+				RuleID:  r.ID,
+				Message: fmt.Sprintf("unknown probe %q (no registered adapter)", r.Probe),
+			})
 		}
 	}
 	return errs

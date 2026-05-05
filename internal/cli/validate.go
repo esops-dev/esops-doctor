@@ -11,6 +11,7 @@ import (
 
 	"github.com/esops-dev/esops-doctor/internal/engine"
 	"github.com/esops-dev/esops-doctor/internal/exit"
+	"github.com/esops-dev/esops-doctor/internal/probes"
 	"github.com/esops-dev/esops-doctor/internal/rules"
 )
 
@@ -20,9 +21,9 @@ func validateRulesCommand() *cli.Command {
 		Usage: "Lint the rule catalog (schema check)",
 		Description: "Validates the embedded rule catalog and any rules in --rules-dir.\n" +
 			"Schema fields are checked, IDs verified unique, severities and dialects\n" +
-			"constrained, and each rule's CEL condition is compiled to catch syntax\n" +
-			"and type errors. Probe-name resolution against a registered adapter is\n" +
-			"deferred until the probes package lands.",
+			"constrained, probe names resolved against the registered adapter set,\n" +
+			"and each rule's CEL condition is compiled to catch syntax and type\n" +
+			"errors.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "rules-dir",
@@ -51,6 +52,7 @@ func runValidateRules(stdout, stderr io.Writer, rulesDir string) error {
 	}
 
 	issues := cat.Validate()
+	issues = append(issues, cat.ValidateProbes(probes.IsKnown)...)
 
 	// CEL compile is run only when schema validation passed: a rule
 	// missing required fields will already have surfaced as an issue,

@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Nightly run for the integration-matrix job (CLAUDE.md §11). UTC
+    # 03:30 keeps it off the busy weekday-morning queue without missing
+    # the Anthropic / Elastic / Opensearch image refresh windows that
+    # land in the small hours.
+    - cron: '30 3 * * *'
 
 permissions:
   contents: read
@@ -63,10 +69,68 @@ jobs:
     name: Integration
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    timeout-minutes: 20
+    env:
+      # Pin the fast-path matrix per CLAUDE.md §11. Override locally
+      # for nightly runs without touching this file. Keep these in sync
+      # with the defaults baked into integration_test.go so a developer
+      # running `make test-integration` and CI exercise the same images.
+      ESOPS_DOCTOR_TEST_ES_IMAGE: docker.elastic.co/elasticsearch/elasticsearch:9.0.0
+      ESOPS_DOCTOR_TEST_OS_IMAGE: opensearchproject/opensearch:2.18.0
+      # Disable testcontainers' Ryuk reaper. Ryuk uses a privileged
+      # sidecar to clean up containers on test crash; ubuntu-latest
+      # runners reclaim the whole VM after the job, so paying for Ryuk
+      # is needless complexity (and a frequent CI flake source).
+      TESTCONTAINERS_RYUK_DISABLED: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
-      - run: go test -tags=integration ./...
+      - name: Pre-pull cluster images
+        # Pull happens inside the test otherwise; explicit step makes
+        # the time visible in CI traces and surfaces image-not-found
+        # before any test logic runs.
+        run: |
+          docker pull "${ESOPS_DOCTOR_TEST_ES_IMAGE}"
+          docker pull "${ESOPS_DOCTOR_TEST_OS_IMAGE}"
+      - name: Integration tests
+        run: go test -tags=integration -count=1 -timeout=15m -v ./...
+
+  integration-matrix:
+    name: Integration (matrix)
+    # Only fires on the nightly schedule. The fast-path `integration`
+    # job above already covers latest-on-PR; this one walks the older
+    # supported versions per CLAUDE.md §11 so a regression against
+    # ES 7.17 / 8.x or OS 1.3 / 2.x is caught before it reaches a
+    # release.
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - es_image: docker.elastic.co/elasticsearch/elasticsearch:7.17.27
+            os_image: opensearchproject/opensearch:1.3.20
+          - es_image: docker.elastic.co/elasticsearch/elasticsearch:8.16.0
+            os_image: opensearchproject/opensearch:2.18.0
+          - es_image: docker.elastic.co/elasticsearch/elasticsearch:9.0.0
+            os_image: opensearchproject/opensearch:3.0.0
+    env:
+      ESOPS_DOCTOR_TEST_ES_IMAGE: ${{ matrix.es_image }}
+      ESOPS_DOCTOR_TEST_OS_IMAGE: ${{ matrix.os_image }}
+      TESTCONTAINERS_RYUK_DISABLED: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Pre-pull cluster images
+        run: |
+          docker pull "${ESOPS_DOCTOR_TEST_ES_IMAGE}"
+          docker pull "${ESOPS_DOCTOR_TEST_OS_IMAGE}"
+      - name: Integration tests
+        run: go test -tags=integration -count=1 -timeout=20m -v ./...

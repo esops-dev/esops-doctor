@@ -25,6 +25,19 @@ type ProbeRegistry interface {
 // etc.) which surface as RuleStatusError.
 var ErrProbeNotFound = errors.New("probe not registered")
 
+// ErrProbeNotApplicable signals "the probe is registered but the cluster
+// doesn't expose this capability on its dialect" — the canonical case is
+// ilm_state on OpenSearch (or ism_state on Elasticsearch). The engine
+// treats it as Skipped with a different reason than ErrProbeNotFound, so
+// an operator sees "ILM is Elasticsearch-only" rather than "probe not
+// registered".
+//
+// Distinct sentinel rather than reusing ErrProbeNotFound because the
+// causes are different — "registered but unavailable on this dialect"
+// is a documented data point a rule author may want to express in CEL,
+// while "not registered at all" is a catalog bug.
+var ErrProbeNotApplicable = errors.New("probe not applicable to this cluster")
+
 // MapRegistry is a fixed in-memory ProbeRegistry. Used in tests and as
 // the v0.1 stand-in before the real probes/ adapters land. Returns
 // ErrProbeNotFound for any name not in the map.

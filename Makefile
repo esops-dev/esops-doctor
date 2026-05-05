@@ -33,7 +33,11 @@ test: ## Run unit tests with the race detector
 	$(GO) test -race -count=1 ./...
 
 .PHONY: test-integration
-test-integration: ## Run integration tests (build tag: integration)
+test-integration: ## Run integration tests (build tag: integration; needs Docker)
+	# The probe-layer integration tests spin up Elasticsearch and
+	# OpenSearch via testcontainers — Docker must be reachable. Pin
+	# images via ESOPS_DOCTOR_TEST_ES_IMAGE / ESOPS_DOCTOR_TEST_OS_IMAGE
+	# to extend the matrix without touching the test source.
 	$(GO) test -race -count=1 -tags=integration ./...
 
 .PHONY: lint

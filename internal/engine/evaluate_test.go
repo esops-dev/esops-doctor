@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -95,6 +96,41 @@ func (f failingRegistry) Probe(_ context.Context, _ string) (any, error) {
 	return nil, f.err
 }
 
+// notApplicableRegistry returns ErrProbeNotApplicable wrapped with a
+// dialect-specific cause — the shape probes.Registry produces when it
+// translates the upstream client.ErrUnsupported sentinel.
+type notApplicableRegistry struct{ cause error }
+
+func (r notApplicableRegistry) Probe(_ context.Context, _ string) (any, error) {
+	return nil, fmt.Errorf("%w: %w", ErrProbeNotApplicable, r.cause)
+}
+
+// TestEvaluateNotApplicableSkipsWithDialectReason asserts that a probe
+// returning ErrProbeNotApplicable (the shape probes.Registry produces
+// when it translates client.ErrUnsupported — ILM on OS, ISM on ES,
+// deprecation_log on OS) lands as Skipped, not Error, and the
+// SkipReason carries the dialect plus the underlying cause.
+//
+// Distinct from the dialect-mismatch skip path (which fires before the
+// probe is even called, on rules.Dialects vs. cluster dialect): this
+// fires when a rule legitimately applies to both products but the
+// cluster's adapter cannot serve the data.
+func TestEvaluateNotApplicableSkipsWithDialectReason(t *testing.T) {
+	eng := mustCompile(t, validRule("r1", "size(self) > 0"))
+	cause := errors.New("ILM is Elasticsearch-only")
+	registry := notApplicableRegistry{cause: cause}
+
+	results := eng.Evaluate(context.Background(), registry, "opensearch")
+	if results[0].Status != RuleStatusSkipped {
+		t.Errorf("Status = %v, want skipped", results[0].Status)
+	}
+	for _, want := range []string{"opensearch", "ILM is Elasticsearch-only", `"nodes"`} {
+		if !strings.Contains(results[0].SkipReason, want) {
+			t.Errorf("SkipReason = %q, want it to contain %q", results[0].SkipReason, want)
+		}
+	}
+}
+
 func TestEvaluateProbeFetchErrorIsError(t *testing.T) {
 	eng := mustCompile(t, validRule("r1", "size(self) > 0"))
 	registry := failingRegistry{err: errors.New("network unreachable")}
@@ -172,9 +208,11 @@ func TestEvaluateMessageCountTemplatingNonList(t *testing.T) {
 
 // TestEvaluateHeapSizeAgainstEmbedded is the load-bearing end-to-end
 // test: the shipped heap_size rule, compiled via the engine, evaluated
-// against a realistic node-stats fixture. A passing fixture must yield
-// pass; a fixture with init>50%RAM must yield fail. Catches breakage
-// in the rule's CEL or in the engine's data binding.
+// against a fixture shaped like the node_stats probe's JSON output
+// (snake_case keys mirroring esops-go/pkg/types.NodeStats json tags).
+// Covers the three branches of the rule's CEL: under-limit + sized
+// for RAM (pass), over the 31 GiB cap (fail), oversized init heap
+// vs. physical memory (fail), no JVM info reported (skip via !has()).
 func TestEvaluateHeapSizeAgainstEmbedded(t *testing.T) {
 	cat, err := rules.LoadEmbedded()
 	if err != nil {
@@ -185,47 +223,40 @@ func TestEvaluateHeapSizeAgainstEmbedded(t *testing.T) {
 		t.Fatalf("Compile: %v", err)
 	}
 
-	const gb = int64(1024 * 1024 * 1024)
-	good := []any{
-		map[string]any{
+	const gb = float64(1024 * 1024 * 1024)
+	heapNode := func(initGiB, maxGiB, ramGiB float64) map[string]any {
+		return map[string]any{
+			"name": "n1",
 			"jvm": map[string]any{
 				"heap": map[string]any{
-					"init": int64(8) * gb,
-					"max":  int64(8) * gb,
+					"init_bytes": initGiB * gb,
+					"max_bytes":  maxGiB * gb,
 				},
 			},
 			"os": map[string]any{
-				"total_physical_memory": int64(32) * gb,
+				"total_physical_memory_bytes": ramGiB * gb,
 			},
-		},
-	}
-	bad := []any{
-		map[string]any{
-			"jvm": map[string]any{
-				"heap": map[string]any{
-					"init": int64(28) * gb, // > 50% of 32GB total
-					"max":  int64(28) * gb,
-				},
-			},
-			"os": map[string]any{
-				"total_physical_memory": int64(32) * gb,
-			},
-		},
+		}
 	}
 
-	t.Run("good", func(t *testing.T) {
-		results := eng.Evaluate(context.Background(), MapRegistry{"nodes": good}, "elasticsearch")
-		if got := findStatus(results, "heap_size"); got != RuleStatusPass {
-			t.Errorf("heap_size status = %v, want pass; results=%+v", got, results)
-		}
-	})
-
-	t.Run("bad", func(t *testing.T) {
-		results := eng.Evaluate(context.Background(), MapRegistry{"nodes": bad}, "elasticsearch")
-		if got := findStatus(results, "heap_size"); got != RuleStatusFail {
-			t.Errorf("heap_size status = %v, want fail", got)
-		}
-	})
+	cases := []struct {
+		name string
+		data []any
+		want RuleStatus
+	}{
+		{"8 GiB heap on 32 GiB host", []any{heapNode(8, 8, 32)}, RuleStatusPass},
+		{"32 GiB heap exceeds 31 GiB cap", []any{heapNode(32, 32, 128)}, RuleStatusFail},
+		{"init heap > 50% of RAM", []any{heapNode(28, 28, 32)}, RuleStatusFail},
+		{"coordinating-only node skipped", []any{map[string]any{"name": "coord-1"}}, RuleStatusPass},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			results := eng.Evaluate(context.Background(), MapRegistry{"node_stats": c.data}, "elasticsearch")
+			if got := findStatus(results, "heap_size"); got != c.want {
+				t.Errorf("heap_size status = %v, want %v; results=%+v", got, c.want, results)
+			}
+		})
+	}
 }
 
 func findStatus(results []RuleResult, ruleID string) RuleStatus {

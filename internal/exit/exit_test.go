@@ -67,6 +67,29 @@ func TestCodeCatalog(t *testing.T) {
 	}
 }
 
+func TestCodeClusterSentinels(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{"unreachable", ErrUnreachable, 3},
+		{"unreachable wrapped", fmt.Errorf("connect: %w", ErrUnreachable), 3},
+		{"auth", ErrAuth, 4},
+		{"forbidden", ErrForbidden, 5},
+		{"unknown product", ErrUnknownProduct, 10},
+		{"findings", ErrFindings, 20},
+		{"findings wrapped", fmt.Errorf("scan failed: %w", ErrFindings), 20},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := Code(c.err); got != c.want {
+				t.Errorf("Code(%v) = %d, want %d", c.err, got, c.want)
+			}
+		})
+	}
+}
+
 func TestSignalCode(t *testing.T) {
 	cases := []struct {
 		sig  os.Signal
