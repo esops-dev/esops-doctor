@@ -17,6 +17,17 @@ import (
 // docs/rules.md. Source is set by the loader and is not present in the
 // YAML; it is the path the rule was loaded from, used in validation
 // error messages so an operator can find the offending file.
+//
+// CountExpression is an optional CEL expression that returns the number
+// substituted into the message's `{{count}}` placeholder when the rule
+// fails. When empty, the engine falls back to len(self) — useful as a
+// rough total but inaccurate for rules whose Condition aggregates over
+// only a subset (e.g. "the *failing* nodes count"). Authors who want
+// `{{count}}` to mean "failing items" set CountExpression to the
+// matching CEL filter, e.g.
+//
+//	condition: self.all(n, healthy(n))
+//	count_expression: size(self.filter(n, !healthy(n)))
 type Rule struct {
 	ID                string               `yaml:"id"`
 	Name              string               `yaml:"name"`
@@ -25,6 +36,7 @@ type Rule struct {
 	Description       string               `yaml:"description"`
 	Probe             string               `yaml:"probe"`
 	Condition         string               `yaml:"condition"`
+	CountExpression   string               `yaml:"count_expression"`
 	Message           string               `yaml:"message"`
 	Remediation       findings.Remediation `yaml:"remediation"`
 	Tags              []string             `yaml:"tags"`

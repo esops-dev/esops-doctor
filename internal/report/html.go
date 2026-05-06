@@ -51,8 +51,9 @@ var (
 func parsedHTMLTemplate() (*template.Template, error) {
 	htmlTmplCacheDo.Do(func() {
 		t, err := template.New("report").Funcs(template.FuncMap{
-			"severityRank": severityRank,
-			"statusRank":   statusRank,
+			"severityRank":  severityRank,
+			"statusRank":    statusRank,
+			"displayStatus": displayStatus,
 		}).Parse(htmlTemplate)
 		if err != nil {
 			htmlTmplCacheErr = fmt.Errorf("parsing html template: %w", err)
@@ -74,13 +75,17 @@ func severityRank(s string) int {
 }
 
 // statusRank ranks status strings so the JS sort surfaces fails first,
-// then errors, then skipped, then passes — matching the order an
-// operator triages findings on the page.
+// then errors, then waived, then skipped, then passes — matching the
+// order an operator triages findings on the page. Waived sits between
+// errors and skipped because a waived row still warrants a glance
+// (the suppression should be reviewed) but doesn't demand action.
 func statusRank(s string) int {
 	switch s {
 	case "fail":
-		return 3
+		return 4
 	case "error":
+		return 3
+	case "waived":
 		return 2
 	case "skipped":
 		return 1
@@ -89,4 +94,17 @@ func statusRank(s string) int {
 	default:
 		return -1
 	}
+}
+
+// displayStatus is the visual override applied to active-waiver rows:
+// the wire status stays "fail" (consumers parsing the JSON/YAML schema
+// see the truth — the rule failed and was suppressed by an operator
+// waiver) but the HTML page surfaces "waived" so a reviewer can filter
+// or sort by suppression state directly. Expired waivers fall back to
+// "fail" because the suppression failed and the finding is live.
+func displayStatus(r Result) string {
+	if r.Status == "fail" && r.Suppression != nil && !r.Suppression.Expired {
+		return "waived"
+	}
+	return r.Status
 }

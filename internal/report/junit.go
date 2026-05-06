@@ -94,12 +94,18 @@ type junitSkipped struct {
 func buildJUnit(h Header, results []engine.RuleResult, opts Options) junitTestSuites {
 	c := classify(results)
 	failures := c.critical + c.error + c.warn + c.info
+	// Active waivers render as <skipped> with the justification in
+	// the message, so CI dashboards (Jenkins, GitLab) treat them as
+	// accepted exceptions rather than fresh failures. Roll them into
+	// the skipped attribute on the suite so the counts agree with
+	// the per-testcase shape.
+	skipped := c.skipped + c.waived
 	suite := junitTestSuite{
 		Name:     junitClassName,
 		Tests:    len(results),
 		Failures: failures,
 		Errors:   c.errored,
-		Skipped:  c.skipped,
+		Skipped:  skipped,
 		Time:     formatJUnitSeconds(h.Duration.Seconds()),
 		Hostname: h.ClusterName,
 	}
@@ -111,7 +117,7 @@ func buildJUnit(h Header, results []engine.RuleResult, opts Options) junitTestSu
 		Tests:    len(results),
 		Failures: failures,
 		Errors:   c.errored,
-		Skipped:  c.skipped,
+		Skipped:  skipped,
 		Time:     formatJUnitSeconds(h.Duration.Seconds()),
 		Suites:   []junitTestSuite{suite},
 	}
@@ -130,13 +136,18 @@ func junitTestCases(results []engine.RuleResult, opts Options) []junitTestCase {
 		}
 		switch r.Status {
 		case engine.RuleStatusFail:
-			if r.Finding != nil {
+			switch {
+			case isActiveWaiver(r.Finding):
+				tc.Skipped = &junitSkipped{
+					Message: "waived: " + r.Finding.Suppression.Justification,
+				}
+			case r.Finding != nil:
 				tc.Failure = &junitFailure{
 					Type:    r.Finding.Severity.String(),
 					Message: r.Finding.Message,
 					Body:    r.Finding.Message,
 				}
-			} else {
+			default:
 				tc.Failure = &junitFailure{Message: r.RuleID}
 			}
 		case engine.RuleStatusError:

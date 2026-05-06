@@ -267,3 +267,61 @@ func findStatus(results []RuleResult, ruleID string) RuleStatus {
 	}
 	return RuleStatus(-1)
 }
+
+// TestCountExpressionFeedsMessage locks the count_expression contract:
+// when present, the rule's message {{count}} is the result of the
+// expression, not len(self). Without this the heap_size message would
+// say "misconfigured on 3 nodes" against a 3-node cluster where only
+// 1 is broken.
+func TestCountExpressionFeedsMessage(t *testing.T) {
+	r := validRule("r1", "size(self.filter(n, n != 'bad')) == size(self)")
+	r.Message = "{{count}} bad nodes"
+	r.CountExpression = "size(self.filter(n, n == 'bad'))"
+	eng := mustCompile(t, r)
+
+	// 3 nodes, one named "bad" — condition fails (because all-good is
+	// false), count_expression returns 1.
+	registry := MapRegistry{"nodes": []any{"a", "bad", "b"}}
+	results := eng.Evaluate(context.Background(), registry, "elasticsearch")
+	if results[0].Status != RuleStatusFail {
+		t.Fatalf("expected fail; got %v", results[0].Status)
+	}
+	if got := results[0].Finding.Message; got != "1 bad nodes" {
+		t.Errorf("count_expression should drive {{count}} = 1; got %q", got)
+	}
+}
+
+// TestCountExpressionMissingFallsBackToSelfSize locks the
+// backwards-compat path: rules without count_expression keep the
+// pre-existing len(self) substitution behaviour.
+func TestCountExpressionMissingFallsBackToSelfSize(t *testing.T) {
+	r := validRule("r1", "size(self) == 0")
+	r.Message = "{{count}} items"
+	eng := mustCompile(t, r)
+
+	registry := MapRegistry{"nodes": []any{"a", "b", "c"}}
+	results := eng.Evaluate(context.Background(), registry, "elasticsearch")
+	if got := results[0].Finding.Message; got != "3 items" {
+		t.Errorf("missing count_expression should fall back to len(self); got %q", got)
+	}
+}
+
+// TestCompileRejectsNonIntCountExpression — a catalog bug where the
+// count_expression returns the wrong type should fail at validate
+// time, not at scan time. Compile aggregates failures so the operator
+// sees every issue in one pass.
+func TestCompileRejectsNonIntCountExpression(t *testing.T) {
+	r := validRule("r1", "size(self) > 0")
+	r.CountExpression = `"a string, not an int"`
+	_, err := Compile(&rules.Catalog{Rules: []rules.Rule{r}})
+	if err == nil {
+		t.Fatal("expected compile failure for string count_expression")
+	}
+	var ce *CompileError
+	if !errors.As(err, &ce) {
+		t.Fatalf("expected CompileError; got %T", err)
+	}
+	if !strings.Contains(ce.Failures[0].Message, "count_expression") {
+		t.Errorf("failure should call out count_expression; got %q", ce.Failures[0].Message)
+	}
+}

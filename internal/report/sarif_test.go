@@ -247,3 +247,57 @@ func TestSARIFEmptyResults(t *testing.T) {
 		t.Errorf("zero-finding scan should emit empty results array; got:\n%s", out)
 	}
 }
+
+// TestSARIFActiveWaiverEmitsSuppression locks the GitHub-code-scanning
+// contract: active waivers map onto SARIF's native suppressions[] so
+// the consumer surfaces the result as accepted-with-justification
+// rather than counting it as a fresh failure. Expired waivers must
+// NOT emit a suppression — the failure is live and the rotted-waiver
+// note in the message is the operator-actionable signal.
+func TestSARIFActiveWaiverEmitsSuppression(t *testing.T) {
+	live := failResult("a", "x", findings.SeverityError, "live failure")
+	waived := failResult("b", "x", findings.SeverityError, "waived failure")
+	waived.Finding.Suppression = &findings.Suppression{
+		Justification: "approved by SRE",
+	}
+	expired := failResult("c", "x", findings.SeverityError, "[waiver expired 2024-01-01] expired failure")
+	expired.Finding.Suppression = &findings.Suppression{
+		Justification: "lapsed",
+		Expired:       true,
+	}
+
+	var buf bytes.Buffer
+	if err := SARIF(&buf, Header{Dialect: "elasticsearch"},
+		[]engine.RuleResult{live, waived, expired}, Options{}); err != nil {
+		t.Fatalf("SARIF: %v", err)
+	}
+	d := decodeSarif(t, buf.Bytes())
+	results := d["runs"].([]any)[0].(map[string]any)["results"].([]any)
+
+	got := map[string][]map[string]any{}
+	for _, raw := range results {
+		r := raw.(map[string]any)
+		id := r["ruleId"].(string)
+		if sups, ok := r["suppressions"].([]any); ok {
+			for _, s := range sups {
+				got[id] = append(got[id], s.(map[string]any))
+			}
+		}
+	}
+	if len(got["a"]) != 0 {
+		t.Errorf("live failure should have no suppressions; got %v", got["a"])
+	}
+	if len(got["c"]) != 0 {
+		t.Errorf("expired-waiver failure should have no suppressions; got %v", got["c"])
+	}
+	if len(got["b"]) != 1 {
+		t.Fatalf("active waiver should emit exactly one suppression; got %v", got["b"])
+	}
+	sup := got["b"][0]
+	if sup["kind"] != "external" || sup["status"] != "accepted" {
+		t.Errorf("suppression kind/status = %+v", sup)
+	}
+	if sup["justification"] != "approved by SRE" {
+		t.Errorf("suppression.justification = %v", sup["justification"])
+	}
+}

@@ -23,10 +23,13 @@ import (
 
 // compiledRule pairs a rule with its compiled CEL program. The rule is
 // kept whole so message templating and dialect filtering at evaluate
-// time don't need a second lookup.
+// time don't need a second lookup. countProg is the optional
+// count_expression program — nil when the rule did not declare one,
+// in which case the message renderer falls back to len(self).
 type compiledRule struct {
-	rule rules.Rule
-	prog cel.Program
+	rule      rules.Rule
+	prog      cel.Program
+	countProg cel.Program
 }
 
 // Engine is a compiled set of rules ready for repeated evaluation.
@@ -122,13 +125,54 @@ func Compile(catalog *rules.Catalog) (*Engine, error) {
 			})
 			continue
 		}
-		compiled = append(compiled, compiledRule{rule: r, prog: prg})
+		countProg, cerr := compileCountExpression(env, r)
+		if cerr != nil {
+			failures = append(failures, *cerr)
+			continue
+		}
+		compiled = append(compiled, compiledRule{rule: r, prog: prg, countProg: countProg})
 	}
 
 	if len(failures) > 0 {
 		return nil, &CompileError{Failures: failures}
 	}
 	return &Engine{rules: compiled, env: env}, nil
+}
+
+// compileCountExpression compiles r.CountExpression as a CEL program
+// returning an int. Returns (nil, nil) when the rule has no
+// expression — the message renderer falls back to len(self) in that
+// case. CEL's `int` and `uint` both satisfy the integer-output check;
+// we coerce to int64 at evaluate time.
+func compileCountExpression(env *cel.Env, r rules.Rule) (cel.Program, *RuleCompileError) {
+	if strings.TrimSpace(r.CountExpression) == "" {
+		return nil, nil
+	}
+	ast, iss := env.Compile(r.CountExpression)
+	if iss != nil && iss.Err() != nil {
+		return nil, &RuleCompileError{
+			RuleID:  r.ID,
+			Source:  r.Source,
+			Message: "count_expression: " + iss.Err().Error(),
+		}
+	}
+	if !ast.OutputType().IsAssignableType(cel.IntType) &&
+		!ast.OutputType().IsAssignableType(cel.UintType) {
+		return nil, &RuleCompileError{
+			RuleID:  r.ID,
+			Source:  r.Source,
+			Message: fmt.Sprintf("count_expression must return int, got %s", ast.OutputType()),
+		}
+	}
+	prg, err := env.Program(ast)
+	if err != nil {
+		return nil, &RuleCompileError{
+			RuleID:  r.ID,
+			Source:  r.Source,
+			Message: "count_expression program: " + err.Error(),
+		}
+	}
+	return prg, nil
 }
 
 // RuleStatus is the outcome of evaluating one rule.

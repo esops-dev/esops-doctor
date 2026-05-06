@@ -1,0 +1,13 @@
+name: staging
+description: Pre-production. Same selection as prod, one severity tier softer.
+
+severity_overrides:
+  heap_size: error
+  bootstrap_memory_lock: error
+  default_credentials: error
+  tls_transport: error
+  anonymous_access: error
+
+skip_tags: []
+include_tags: []
+rule_ids: []

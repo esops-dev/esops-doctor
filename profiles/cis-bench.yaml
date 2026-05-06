@@ -1,0 +1,15 @@
+name: cis-bench
+description: >
+  CIS-inspired benchmark subset. Selects rules tagged security,
+  bootstrap, or cis-bench. Currently a placeholder: until the security
+  and bootstrap-parity rule sets land in the catalog the include_tags
+  filter selects zero rules and a scan run with this profile will
+  warn loudly.
+
+severity_overrides: {}
+skip_tags: []
+include_tags:
+  - security
+  - bootstrap
+  - cis-bench
+rule_ids: []

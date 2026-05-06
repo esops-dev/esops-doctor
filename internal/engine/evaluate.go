@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"strings"
 	"time"
@@ -128,7 +129,7 @@ func evalOne(ctx context.Context, cr compiledRule, registry ProbeRegistry, diale
 		Name:        cr.rule.Name,
 		Severity:    cr.rule.Severity,
 		Category:    cr.rule.Category,
-		Message:     renderMessage(cr.rule.Message, entry.Data),
+		Message:     renderMessage(ctx, cr, entry.Data),
 		Remediation: cr.rule.Remediation,
 		Dialect:     dialect,
 	}
@@ -145,18 +146,47 @@ func ruleSupportsDialect(r rules.Rule, dialect string) bool {
 	return false
 }
 
-// renderMessage substitutes the v0.1 message placeholders. Currently
-// only {{count}} is supported, defined as the size of `self` when
-// self is list/map/string-shaped, and "0" otherwise.
+// renderMessage substitutes the v0.1 message placeholders.
+// {{count}} resolves to the rule's count_expression result when one
+// was declared, falling back to len(self) for backwards compatibility.
 //
-// This is a deliberate minimum: the heap_size message reads
-// "misconfigured on {{count}} nodes" which technically wants the
-// failing-node count rather than the total, but the engine only sees
-// one boolean from the condition. A future count_expression field on
-// the rule will let authors compute the failing count explicitly; the
-// substitution here gives a useful number until then.
-func renderMessage(template string, data any) string {
-	return strings.ReplaceAll(template, "{{count}}", fmt.Sprintf("%d", selfSize(data)))
+// The fallback is "self size" rather than "failing-item count" because
+// the engine only sees one boolean from the condition; rules that want
+// the precise failing count declare a count_expression CEL filter.
+// Evaluation errors on count_expression are not fatal — the renderer
+// falls back to len(self) and a debug-friendly trail (the original
+// error is dropped, but the rule's failure is the operator-actionable
+// signal, not the count itself).
+func renderMessage(ctx context.Context, cr compiledRule, data any) string {
+	return strings.ReplaceAll(cr.rule.Message, "{{count}}",
+		fmt.Sprintf("%d", evalCount(ctx, cr, data)))
+}
+
+func evalCount(ctx context.Context, cr compiledRule, data any) int64 {
+	if cr.countProg == nil {
+		return int64(selfSize(data))
+	}
+	out, _, err := cr.countProg.ContextEval(ctx, map[string]any{"self": data})
+	if err != nil {
+		return int64(selfSize(data))
+	}
+	switch v := out.Value().(type) {
+	case int64:
+		return v
+	case uint64:
+		// CEL's uint can grow beyond int64 in principle. In practice
+		// rules count items in a probe response (always tiny relative
+		// to MaxInt64); clamp rather than overflow so a hostile rule
+		// can't silently make the message say "-9223372036854775808".
+		if v > math.MaxInt64 {
+			return math.MaxInt64
+		}
+		return int64(v)
+	case int:
+		return int64(v)
+	default:
+		return int64(selfSize(data))
+	}
 }
 
 func selfSize(data any) int {

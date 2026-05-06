@@ -265,3 +265,52 @@ func TestHTMLSeverityRankInTemplate(t *testing.T) {
 		t.Errorf("warn row should carry rank 2; got:\n%s", out)
 	}
 }
+
+// TestHTMLActiveWaiverShownAsWaivedRow guards the suppression rendering
+// path: the row's data-status flips to "waived" so the status filter
+// works, the waived count pill appears in the header, and the
+// justification rides inline as a waiver-note. Expired waivers retain
+// data-status="fail" but get the expired class so an operator can spot
+// the rotted suppression at a glance.
+func TestHTMLActiveWaiverShownAsWaivedRow(t *testing.T) {
+	exp := time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
+	live := failResult("live", "x", findings.SeverityCritical, "live failure")
+	waived := failResult("waived_rule", "x", findings.SeverityCritical, "waived failure")
+	waived.Finding.Suppression = &findings.Suppression{
+		Justification: "approved by SRE",
+		ExpiresAt:     &exp,
+	}
+	expiredAt := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	expired := failResult("expired_rule", "x", findings.SeverityCritical,
+		"[waiver expired 2024-01-01] expired failure")
+	expired.Finding.Suppression = &findings.Suppression{
+		Justification: "lapsed",
+		ExpiresAt:     &expiredAt,
+		Expired:       true,
+	}
+
+	var buf bytes.Buffer
+	if err := HTML(&buf, sampleHeader(),
+		[]engine.RuleResult{live, waived, expired}, Options{}); err != nil {
+		t.Fatalf("HTML: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		`class="pill waived">1 waived`,
+		`data-filter="status" value="waived"`,
+		`data-status="waived"`,
+		`class="status waived"`,
+		`approved by SRE`,
+		`waiver-note expired`,
+		`waiver expired on 2024-01-01: lapsed`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("html waiver rendering missing %q\nfull output (truncated):\n%.1200s", want, out)
+		}
+	}
+	// Live row stays as fail; expired row stays as fail (suppression
+	// failed). Only the active waiver flips to data-status="waived".
+	if strings.Count(out, `data-status="waived"`) != 1 {
+		t.Errorf("expected exactly one row marked waived; got:\n%s", out)
+	}
+}
