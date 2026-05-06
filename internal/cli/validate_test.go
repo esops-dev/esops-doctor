@@ -207,6 +207,94 @@ func TestValidateRulesRejectsUnknownProbe(t *testing.T) {
 	}
 }
 
+func TestValidateRulesLayersUserRulesDir(t *testing.T) {
+	// TestMain pins XDG_CONFIG_HOME to a tempdir. Drop a rule there and
+	// confirm validate-rules counts it in the OK summary — proves the
+	// user-overrides path is layered alongside --rules-dir, matching
+	// scan / list-rules / explain. Asymmetric behaviour would silently
+	// skip an operator's user-dir rule until they ran scan against a
+	// real cluster.
+	xdg := os.Getenv("XDG_CONFIG_HOME")
+	if xdg == "" {
+		t.Skip("XDG_CONFIG_HOME not set in test env")
+	}
+	rulesDir := filepath.Join(xdg, "esops-doctor", "rules.d")
+	if err := os.MkdirAll(rulesDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(filepath.Join(xdg, "esops-doctor")) })
+	body := []byte(`checks:
+  - id: validate_user_rule
+    name: User Rule
+    category: extras
+    severity: info
+    description: Lives in the user rules.d directory.
+    probe: nodes
+    condition: "true"
+    message: m
+    dialects: [elasticsearch]
+`)
+	if err := os.WriteFile(filepath.Join(rulesDir, "u.yaml"), body, 0o600); err != nil {
+		t.Fatalf("write rule: %v", err)
+	}
+
+	var out, errOut bytes.Buffer
+	if err := runValidateRules(&out, &errOut, ""); err != nil {
+		t.Fatalf("runValidateRules: %v", err)
+	}
+	if !strings.Contains(out.String(), "OK:") {
+		t.Errorf("expected OK summary; got stdout=%q stderr=%q", out.String(), errOut.String())
+	}
+	// The OK line carries a count; with one shipped rule + one user
+	// rule we expect at least 2.
+	if !strings.Contains(out.String(), "2 rule(s)") {
+		t.Errorf("expected 2 rule(s) counted; got %q", out.String())
+	}
+}
+
+func TestValidateRulesSurfacesUserDirIssues(t *testing.T) {
+	// Same scenario as TestValidateRulesLayersUserRulesDir, but the
+	// user-dir rule is malformed. Asserts the per-issue stderr UX
+	// reports the user-dir violation by source — operators iterating
+	// in the user dir need addressable errors, not "rule catalog
+	// invalid: <bundle>".
+	xdg := os.Getenv("XDG_CONFIG_HOME")
+	if xdg == "" {
+		t.Skip("XDG_CONFIG_HOME not set in test env")
+	}
+	rulesDir := filepath.Join(xdg, "esops-doctor", "rules.d")
+	if err := os.MkdirAll(rulesDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(filepath.Join(xdg, "esops-doctor")) })
+	body := []byte(`checks:
+  - id: BadID
+    name: ""
+    category: x
+    severity: info
+    description: d
+    probe: nodes
+    condition: "true"
+    message: m
+    dialects: [elasticsearch]
+`)
+	if err := os.WriteFile(filepath.Join(rulesDir, "bad.yaml"), body, 0o600); err != nil {
+		t.Fatalf("write rule: %v", err)
+	}
+
+	var out, errOut bytes.Buffer
+	err := runValidateRules(&out, &errOut, "")
+	if err == nil {
+		t.Fatal("expected validation error from malformed user-dir rule")
+	}
+	if !errors.Is(err, exit.ErrCatalog) {
+		t.Errorf("err should match ErrCatalog (exit 21); got %v", err)
+	}
+	if !strings.Contains(errOut.String(), "BadID") {
+		t.Errorf("stderr should reference offending rule id; got %q", errOut.String())
+	}
+}
+
 func TestValidateRulesEndToEnd(t *testing.T) {
 	// Drives the command through the urfave entry point, exercising
 	// global flags + Before hook on the way to the action. Skipping

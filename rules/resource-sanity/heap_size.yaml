@@ -21,6 +21,17 @@ checks:
           )
         )
       )
+    count_expression: |
+      size(self.filter(node,
+        has(node.jvm) && has(node.jvm.heap) && has(node.jvm.heap.max_bytes) &&
+        (
+          int(node.jvm.heap.max_bytes) > 31 * 1024 * 1024 * 1024 ||
+          (
+            has(node.os) && has(node.os.total_physical_memory_bytes) &&
+            int(node.jvm.heap.init_bytes) * 2 > int(node.os.total_physical_memory_bytes)
+          )
+        )
+      ))
     message: Heap size misconfigured on {{count}} nodes.
     remediation:
       command: Update JVM options and restart nodes

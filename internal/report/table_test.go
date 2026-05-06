@@ -54,7 +54,7 @@ func TestTableLinesUpFindingsAndSummary(t *testing.T) {
 		"SEVERITY", "RULE", "CATEGORY", "MESSAGE",
 		"critical", "heap_size", "Heap size misconfigured",
 		"warn", "zone_awareness",
-		"summary: 1 critical, 0 error, 1 warn, 0 info; 1 passed, 0 skipped, 0 errored | dialect=opensearch",
+		"summary: 1 critical, 0 error, 1 warn, 0 info; 1 passed, 0 skipped, 0 errored, 0 waived | dialect=opensearch",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q\nfull output:\n%s", want, out)
@@ -202,5 +202,102 @@ func TestOneLineCollapsesNewlinesAndTabs(t *testing.T) {
 	got := oneLine("first\nsecond\twith\ttabs")
 	if got != "first | second with tabs" {
 		t.Errorf("oneLine = %q", got)
+	}
+}
+
+// TestActiveWaiverDropsFromSeverityCountsAndMax confirms the
+// suppression-aware accounting: an active waiver lifts its finding out
+// of MaxFailingSeverity (so the --fail-on gate in the cli passes) and
+// out of the per-severity totals (so the summary line tells the truth).
+func TestActiveWaiverDropsFromSeverityCountsAndMax(t *testing.T) {
+	live := failResult("a", "x", findings.SeverityCritical, "live")
+	waived := failResult("b", "x", findings.SeverityCritical, "waived")
+	waived.Finding.Suppression = &findings.Suppression{Justification: "ok"}
+
+	results := []engine.RuleResult{live, waived}
+
+	if got := MaxFailingSeverity(results); got != findings.SeverityCritical {
+		t.Errorf("MaxFailingSeverity should still be critical from live; got %v", got)
+	}
+
+	// Drop the live one; only the waived critical remains. Now max
+	// should be SeverityUnknown so the cli won't fire ErrFindings.
+	results = []engine.RuleResult{waived}
+	if got := MaxFailingSeverity(results); got != findings.SeverityUnknown {
+		t.Errorf("MaxFailingSeverity over-only-waivers should be Unknown; got %v", got)
+	}
+
+	c := classify(results)
+	if c.critical != 0 {
+		t.Errorf("active waiver should not appear as critical; got %+v", c)
+	}
+	if c.waived != 1 {
+		t.Errorf("waived count = %d, want 1", c.waived)
+	}
+}
+
+// TestExpiredWaiverStaysLoud locks in the CLAUDE.md §9 guarantee:
+// the finding contributes to severity counts and the --fail-on max
+// even when the operator's waiver matched, because the waiver expired.
+func TestExpiredWaiverStaysLoud(t *testing.T) {
+	exp := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	r := failResult("a", "x", findings.SeverityError, "[waiver expired 2024-01-01] orig msg")
+	r.Finding.Suppression = &findings.Suppression{
+		Justification: "stale",
+		ExpiresAt:     &exp,
+		Expired:       true,
+	}
+
+	results := []engine.RuleResult{r}
+	if got := MaxFailingSeverity(results); got != findings.SeverityError {
+		t.Errorf("expired waiver should keep severity live; got %v", got)
+	}
+	c := classify(results)
+	if c.error != 1 || c.waived != 0 {
+		t.Errorf("expired waiver counts wrong: %+v", c)
+	}
+}
+
+// TestTableSurfacesWaivedSection confirms the renderer splits live
+// failures from active-waiver suppressions, and that the footer carries
+// the waived count.
+func TestTableSurfacesWaivedSection(t *testing.T) {
+	exp := time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
+	live := failResult("heap_size", "resource_sanity", findings.SeverityCritical, "live failure")
+	waived := failResult("tls_transport", "security", findings.SeverityCritical, "TLS missing")
+	waived.Finding.Suppression = &findings.Suppression{
+		Justification: "internal-only cluster",
+		ExpiresAt:     &exp,
+	}
+
+	var buf bytes.Buffer
+	if err := Table(&buf, Header{Dialect: "elasticsearch"},
+		[]engine.RuleResult{live, waived}, TableOptions{}); err != nil {
+		t.Fatalf("Table: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		"heap_size", "live failure",
+		"waived (1):",
+		"tls_transport",
+		"expires 2099-01-01",
+		"internal-only cluster",
+		"1 waived",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q\nfull output:\n%s", want, out)
+		}
+	}
+	// The waived row must NOT appear in the live failures table.
+	headerIdx := strings.Index(out, "SEVERITY")
+	waivedIdx := strings.Index(out, "waived (1)")
+	if headerIdx == -1 || waivedIdx == -1 || headerIdx >= waivedIdx {
+		t.Fatalf("expected SEVERITY header before waived section; got:\n%s", out)
+	}
+	// Anything between header and waived section is the live table —
+	// tls_transport must not appear there.
+	liveTable := out[headerIdx:waivedIdx]
+	if strings.Contains(liveTable, "tls_transport") {
+		t.Errorf("active waiver leaked into live findings table:\n%s", liveTable)
 	}
 }

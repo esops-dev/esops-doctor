@@ -89,15 +89,28 @@ type sarifRuleDefaults struct {
 }
 
 type sarifResult struct {
-	RuleID    string    `json:"ruleId"`
-	RuleIndex int       `json:"ruleIndex"`
-	Level     string    `json:"level,omitempty"`
-	Kind      string    `json:"kind,omitempty"`
-	Message   sarifText `json:"message"`
+	RuleID       string             `json:"ruleId"`
+	RuleIndex    int                `json:"ruleIndex"`
+	Level        string             `json:"level,omitempty"`
+	Kind         string             `json:"kind,omitempty"`
+	Message      sarifText          `json:"message"`
+	Suppressions []sarifSuppression `json:"suppressions,omitempty"`
 }
 
 type sarifText struct {
 	Text string `json:"text"`
+}
+
+// sarifSuppression maps an active doctor waiver onto SARIF's native
+// suppression model so GitHub code-scanning and similar consumers
+// surface the result as accepted-with-justification rather than
+// double-counting it as a fresh failure. Expired waivers do NOT
+// emit a suppression — the failure is live by then, and the rotted
+// waiver is already prefixed into the message text (CLAUDE.md §9).
+type sarifSuppression struct {
+	Kind          string `json:"kind"`
+	Status        string `json:"status,omitempty"`
+	Justification string `json:"justification,omitempty"`
 }
 
 type sarifInvoc struct {
@@ -188,6 +201,13 @@ func sarifResultOf(r engine.RuleResult, ruleIdx int, dialect string) sarifResult
 		if r.Finding != nil {
 			res.Level = sarifLevel(r.Finding.Severity)
 			res.Message.Text = r.Finding.Message
+			if isActiveWaiver(r.Finding) {
+				res.Suppressions = []sarifSuppression{{
+					Kind:          "external",
+					Status:        "accepted",
+					Justification: r.Finding.Suppression.Justification,
+				}}
+			}
 		}
 	case engine.RuleStatusSkipped:
 		res.Message.Text = r.SkipReason

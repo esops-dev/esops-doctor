@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -391,6 +393,210 @@ func TestScanRejectsUnknownFormat(t *testing.T) {
 	}
 	if got := exit.Code(err); got != 2 {
 		t.Errorf("exit code = %d, want 2; err=%v", got, err)
+	}
+}
+
+// TestScanRejectsUnknownProfile confirms a typo'd --profile fails fast
+// with exit 2, before any cluster work happens.
+func TestScanRejectsUnknownProfile(t *testing.T) {
+	err := Run(context.Background(), []string{
+		"esops-doctor", "scan", "--profile", "prdo", "--url", "http://example.invalid",
+	})
+	if err == nil {
+		t.Fatal("expected error for unknown profile")
+	}
+	if got := exit.Code(err); got != 2 {
+		t.Errorf("exit code = %d, want 2; err=%v", got, err)
+	}
+	if !strings.Contains(err.Error(), "unknown profile") {
+		t.Errorf("err should call out unknown profile; got %v", err)
+	}
+}
+
+// TestScanProfileFiltersAndOverridesSeverity drives the prod profile
+// against a healthy cluster and asserts the rule still passes (the
+// override only changes severity for fails). Then drives the dev
+// profile against the failing-heap fixture: dev does not override
+// heap_size's severity, so the failure is still critical and the exit
+// is 20.
+//
+// The point of this test is the integration handshake — proves the
+// scan command loaded the embedded profile catalog and threaded the
+// selected profile through to engine.Compile via applyProfile.
+func TestScanProdProfilePassesOnHealthyCluster(t *testing.T) {
+	const gb = int64(1024 * 1024 * 1024)
+	healthy := types.NodeStats{
+		Name: "n1",
+		JVM:  types.NodeJVMStats{Heap: types.NodeJVMHeap{InitBytes: 8 * gb, MaxBytes: 8 * gb}},
+		OS:   types.NodeOSStats{TotalPhysicalMemoryBytes: 32 * gb},
+	}
+	stubConnect(t, &client.Client{
+		Info:      types.ClusterInfo{Dialect: types.DialectElasticsearch, ClusterName: "prod-eu", Version: "9.0.0"},
+		NodeStats: &fakeNodeStatsInspector{Result: []types.NodeStats{healthy}},
+	})
+
+	var stdout bytes.Buffer
+	root := newRoot()
+	root.Writer = &stdout
+	if err := root.Run(context.Background(), []string{
+		"esops-doctor", "scan", "--profile", "prod", "--url", "http://example.invalid",
+	}); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "1 passed") {
+		t.Errorf("expected 1 passed; got %q", stdout.String())
+	}
+}
+
+// TestScanCisBenchProfileFiltersHeapRule confirms the cis-bench profile
+// narrows the catalog by include_tags. heap_size has tags
+// [prod, performance] — neither matches [security, bootstrap, cis-bench],
+// so cis-bench should drop heap_size from the run, leaving zero rules
+// to evaluate. The exit code is 0 because nothing failed.
+func TestScanCisBenchProfileFiltersHeapRule(t *testing.T) {
+	const gb = int64(1024 * 1024 * 1024)
+	overSized := types.NodeStats{
+		Name: "n1",
+		JVM:  types.NodeJVMStats{Heap: types.NodeJVMHeap{InitBytes: 32 * gb, MaxBytes: 32 * gb}},
+		OS:   types.NodeOSStats{TotalPhysicalMemoryBytes: 64 * gb},
+	}
+	stubConnect(t, &client.Client{
+		Info:      types.ClusterInfo{Dialect: types.DialectElasticsearch, ClusterName: "test", Version: "9.0.0"},
+		NodeStats: &fakeNodeStatsInspector{Result: []types.NodeStats{overSized}},
+	})
+
+	var stdout bytes.Buffer
+	root := newRoot()
+	root.Writer = &stdout
+	err := root.Run(context.Background(), []string{
+		"esops-doctor", "scan", "--profile", "cis-bench", "--url", "http://example.invalid",
+	})
+	if err != nil {
+		t.Fatalf("expected clean exit when cis-bench filters out the failing rule; got %v", err)
+	}
+}
+
+// TestScanWaiverSuppressesFailingFinding loads a waivers file that
+// covers heap_size and confirms the failing scan now exits 0 instead
+// of 20 — the operator's documented suppression cleared the gate.
+func TestScanWaiverSuppressesFailingFinding(t *testing.T) {
+	const gb = int64(1024 * 1024 * 1024)
+	overSized := types.NodeStats{
+		Name: "n1",
+		JVM:  types.NodeJVMStats{Heap: types.NodeJVMHeap{InitBytes: 32 * gb, MaxBytes: 32 * gb}},
+		OS:   types.NodeOSStats{TotalPhysicalMemoryBytes: 64 * gb},
+	}
+	stubConnect(t, &client.Client{
+		Info:      types.ClusterInfo{Dialect: types.DialectElasticsearch, ClusterName: "test", Version: "9.0.0"},
+		NodeStats: &fakeNodeStatsInspector{Result: []types.NodeStats{overSized}},
+	})
+
+	dir := t.TempDir()
+	waiverPath := filepath.Join(dir, "w.yaml")
+	if err := os.WriteFile(waiverPath, []byte(`
+waivers:
+  - rule_id: heap_size
+    justification: Approved by SRE
+    expires_at: 2099-12-31
+`), 0o600); err != nil {
+		t.Fatalf("write waivers: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	root := newRoot()
+	root.Writer = &stdout
+	if err := root.Run(context.Background(), []string{
+		"esops-doctor", "scan", "--waivers", waiverPath, "--url", "http://example.invalid",
+	}); err != nil {
+		t.Fatalf("scan with waiver should pass; got %v", err)
+	}
+	if !strings.Contains(stdout.String(), "1 waived") {
+		t.Errorf("summary should report 1 waived; got %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "Approved by SRE") {
+		t.Errorf("waived section should show justification; got %q", stdout.String())
+	}
+}
+
+// TestScanExpiredWaiverFailsLoud — the CLAUDE.md §9 contract:
+// expired waivers re-surface the finding, prefixed with the expired
+// note, and the scan still exits 20.
+func TestScanExpiredWaiverFailsLoud(t *testing.T) {
+	const gb = int64(1024 * 1024 * 1024)
+	overSized := types.NodeStats{
+		Name: "n1",
+		JVM:  types.NodeJVMStats{Heap: types.NodeJVMHeap{InitBytes: 32 * gb, MaxBytes: 32 * gb}},
+		OS:   types.NodeOSStats{TotalPhysicalMemoryBytes: 64 * gb},
+	}
+	stubConnect(t, &client.Client{
+		Info:      types.ClusterInfo{Dialect: types.DialectElasticsearch, ClusterName: "test", Version: "9.0.0"},
+		NodeStats: &fakeNodeStatsInspector{Result: []types.NodeStats{overSized}},
+	})
+
+	dir := t.TempDir()
+	waiverPath := filepath.Join(dir, "w.yaml")
+	if err := os.WriteFile(waiverPath, []byte(`
+waivers:
+  - rule_id: heap_size
+    justification: was approved but lapsed
+    expires_at: 2024-01-01
+`), 0o600); err != nil {
+		t.Fatalf("write waivers: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	root := newRoot()
+	root.Writer = &stdout
+	err := root.Run(context.Background(), []string{
+		"esops-doctor", "scan", "--waivers", waiverPath, "--url", "http://example.invalid",
+	})
+	if err == nil {
+		t.Fatal("expected ErrFindings; expired waiver must not suppress the failure")
+	}
+	if got := exit.Code(err); got != 20 {
+		t.Errorf("exit code = %d, want 20; err=%v", got, err)
+	}
+	if !strings.Contains(stdout.String(), "[waiver expired 2024-01-01]") {
+		t.Errorf("expected expired-waiver prefix in output; got %q", stdout.String())
+	}
+}
+
+// TestScanMissingWaiversFileIsUsageError — an explicit --waivers PATH
+// that does not exist should fail fast at exit 2, before any cluster
+// work happens. (The default file lookup, by contrast, silently
+// returns no waivers — see TestLoadDefaultReturnsNilWhenNothingFound
+// in the waivers package.)
+func TestScanMissingWaiversFileIsUsageError(t *testing.T) {
+	err := Run(context.Background(), []string{
+		"esops-doctor", "scan", "--waivers", "/nonexistent/path/waivers.yaml",
+		"--url", "http://example.invalid",
+	})
+	if err == nil {
+		t.Fatal("expected error for missing waivers path")
+	}
+	if got := exit.Code(err); got != 2 {
+		t.Errorf("exit code = %d, want 2; err=%v", got, err)
+	}
+}
+
+// TestScanClusterWaiversFlagIsDocumentedButGated reflects the current
+// state: --cluster-waivers is reserved (the user story is on the
+// roadmap) but pkg/client does not yet expose the document-read
+// capability needed to implement it. The flag returns a usage error
+// pointing at the upstream gap rather than silently no-op'ing.
+func TestScanClusterWaiversFlagIsDocumentedButGated(t *testing.T) {
+	err := Run(context.Background(), []string{
+		"esops-doctor", "scan", "--cluster-waivers", "--url", "http://example.invalid",
+	})
+	if err == nil {
+		t.Fatal("expected usage error explaining the upstream gap")
+	}
+	if got := exit.Code(err); got != 2 {
+		t.Errorf("exit code = %d, want 2; err=%v", got, err)
+	}
+	if !strings.Contains(err.Error(), "cluster-waivers") ||
+		!strings.Contains(err.Error(), "pkg/client") {
+		t.Errorf("err should explain the upstream pkg/client gap; got %v", err)
 	}
 }
 

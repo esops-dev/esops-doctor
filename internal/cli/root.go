@@ -35,6 +35,8 @@ func newRoot() *cli.Command {
 		Before: initLogger,
 		Commands: []*cli.Command{
 			scanCommand(),
+			listRulesCommand(),
+			explainCommand(),
 			validateRulesCommand(),
 			versionCommand(),
 		},

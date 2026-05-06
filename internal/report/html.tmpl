@@ -111,6 +111,9 @@ tbody tr.hidden { display: none; }
 .status.pass    { color: var(--pass); }
 .status.skipped { color: var(--skipped); }
 .status.error   { color: var(--critical); }
+.status.waived  { color: var(--accent); }
+.waiver-note    { display: block; margin-top: 0.3rem; font-size: 0.8em; color: var(--muted); font-style: italic; }
+.waiver-note.expired { color: var(--error); font-style: normal; font-weight: 600; }
 .rule-name { font-weight: 600; }
 .rule-id { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.8em; color: var(--muted); margin-top: 0.1rem; }
 .tags { margin-top: 0.3rem; display: flex; flex-wrap: wrap; gap: 0.25rem; }
@@ -168,6 +171,7 @@ footer.tool-footer code { font-family: ui-monospace, "SF Mono", Menlo, monospace
     {{if gt .Summary.BySeverity.Info 0}}<span class="pill info">{{.Summary.BySeverity.Info}} info</span>{{end}}
     <span class="pill pass">{{.Summary.Passed}} passed</span>
     {{if gt .Summary.Skipped 0}}<span class="pill skipped">{{.Summary.Skipped}} skipped</span>{{end}}
+    {{if gt .Summary.Waived 0}}<span class="pill waived">{{.Summary.Waived}} waived</span>{{end}}
     {{if gt .Summary.Errored 0}}<span class="pill errored">{{.Summary.Errored}} errored</span>{{end}}
   </div>
 </header>
@@ -179,7 +183,8 @@ footer.tool-footer code { font-family: ui-monospace, "SF Mono", Menlo, monospace
     <label><input type="checkbox" data-filter="status" value="fail" checked> fail</label>
     <label><input type="checkbox" data-filter="status" value="error" checked> error</label>
     <label><input type="checkbox" data-filter="status" value="skipped" checked> skipped</label>
-    <label><input type="checkbox" data-filter="status" value="pass"{{if not (or .Summary.Failed .Summary.Errored .Summary.Skipped)}} checked{{end}}> pass</label>
+    <label><input type="checkbox" data-filter="status" value="waived" checked> waived</label>
+    <label><input type="checkbox" data-filter="status" value="pass"{{if not (or .Summary.Failed .Summary.Errored .Summary.Skipped .Summary.Waived)}} checked{{end}}> pass</label>
   </fieldset>
   <fieldset>
     <legend>Severity</legend>
@@ -204,8 +209,9 @@ footer.tool-footer code { font-family: ui-monospace, "SF Mono", Menlo, monospace
   </thead>
   <tbody>
     {{range .Results}}
-    <tr data-status="{{.Status}}" data-severity="{{.Severity}}">
-      <td class="status {{.Status}}" data-sort-value="{{statusRank .Status}}">{{.Status}}</td>
+    {{$displayStatus := displayStatus .}}
+    <tr data-status="{{$displayStatus}}" data-severity="{{.Severity}}">
+      <td class="status {{$displayStatus}}" data-sort-value="{{statusRank $displayStatus}}">{{$displayStatus}}</td>
       <td class="sev {{.Severity}}" data-sort-value="{{severityRank .Severity}}">{{or .Severity "—"}}</td>
       <td class="rule">
         <div class="rule-name">{{or .Name .RuleID}}</div>
@@ -218,6 +224,13 @@ footer.tool-footer code { font-family: ui-monospace, "SF Mono", Menlo, monospace
       </td>
       <td>
         {{if .Message}}{{.Message}}{{else if .SkipReason}}<em>{{.SkipReason}}</em>{{else if .Error}}<em>{{.Error}}</em>{{else}}—{{end}}
+        {{with .Suppression}}
+          {{if .Expired}}
+            <span class="waiver-note expired">waiver expired{{if .ExpiresAt}} on {{.ExpiresAt.Format "2006-01-02"}}{{end}}: {{.Justification}}</span>
+          {{else}}
+            <span class="waiver-note">waived{{if .ExpiresAt}} until {{.ExpiresAt.Format "2006-01-02"}}{{end}}: {{.Justification}}</span>
+          {{end}}
+        {{end}}
         {{if .Description}}<details class="about"><summary>about this rule</summary><p>{{.Description}}</p></details>{{end}}
       </td>
       <td class="remediation">

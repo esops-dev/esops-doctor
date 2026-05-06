@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"strings"
 	"time"
@@ -18,9 +19,11 @@ import (
 	"github.com/esops-dev/esops-doctor/internal/findings"
 	"github.com/esops-dev/esops-doctor/internal/logging"
 	"github.com/esops-dev/esops-doctor/internal/probes"
+	"github.com/esops-dev/esops-doctor/internal/profiles"
 	"github.com/esops-dev/esops-doctor/internal/report"
 	"github.com/esops-dev/esops-doctor/internal/rules"
 	"github.com/esops-dev/esops-doctor/internal/version"
+	"github.com/esops-dev/esops-doctor/internal/waivers"
 )
 
 // connectFn is the seam scan tests use to bypass the real cluster.
@@ -48,6 +51,34 @@ func scanCommand() *cli.Command {
 				Value:     "error",
 				Usage:     "Severity threshold for non-zero exit: info | warn | error | critical",
 				Validator: validateFailOn,
+			},
+			&cli.StringFlag{
+				Name:  "profile",
+				Usage: "Named profile to apply: prod | staging | dev | ci | cis-bench | <embedded name>",
+			},
+			&cli.StringFlag{
+				Name:  "rules-dir",
+				Usage: "Additional directory of rule YAML files layered over the embedded catalog and the user rules.d",
+			},
+			&cli.StringSliceFlag{
+				Name:  "tags",
+				Usage: "Run only rules carrying at least one of these tags (repeatable or comma-separated)",
+			},
+			&cli.StringSliceFlag{
+				Name:  "skip-tags",
+				Usage: "Skip rules carrying any of these tags (repeatable or comma-separated)",
+			},
+			&cli.StringSliceFlag{
+				Name:  "rule-id",
+				Usage: "Run only the named rules (repeatable or comma-separated)",
+			},
+			&cli.StringFlag{
+				Name:  "waivers",
+				Usage: "Path to a waivers YAML file (default: .esops-doctor.yaml in cwd or user config)",
+			},
+			&cli.BoolFlag{
+				Name:  "cluster-waivers",
+				Usage: "Also read suppressions from the .esops-doctor-waivers index (not yet implementable: pkg/client lacks document-read capability)",
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -84,6 +115,17 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 		return exit.Usage("%s", err.Error())
 	}
 
+	if cmd.Bool("cluster-waivers") {
+		// CLAUDE.md §3 forbids reaching around pkg/client to read
+		// cluster documents directly, and pkg/client does not
+		// currently expose a Search/document-read capability. The
+		// flag is wired so its name is reserved and discoverable;
+		// the upstream capability is the unblocking dependency.
+		return exit.Usage("--cluster-waivers is documented but not yet implemented: " +
+			"esops-go/pkg/client does not expose a document-read capability (see CLAUDE.md §3); " +
+			"file-based waivers via --waivers are wired and ready")
+	}
+
 	defaults := defaultsFrom(ctx)
 	format, err := resolveOutput(cmd, defaults.Output)
 	if err != nil {
@@ -95,10 +137,34 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 		return err
 	}
 
-	cat, err := loadCatalog()
+	fullCat, err := loadLayeredCatalog(cmd.String("rules-dir"))
 	if err != nil {
 		return err
 	}
+	cat, err := applyProfile(cmd, fullCat)
+	if err != nil {
+		return err
+	}
+	cat = applyScanFilters(cmd, cat)
+
+	waiverSet, err := loadWaivers(cmd)
+	if err != nil {
+		return err
+	}
+	// Resolve waivers keyed by deprecated_alias against the unfiltered
+	// catalog so an alias used in a waiver still matches when the
+	// profile dropped the rule (or didn't). The cli is the join point;
+	// the waivers package stays catalog-agnostic.
+	if !waiverSet.Empty() {
+		aliases := aliasIndex(fullCat)
+		waiverSet.ResolveAliases(aliases, func(alias, canonical string) {
+			logging.Logger().Debug("doctor.scan.waivers.alias_resolved",
+				"alias", alias,
+				"canonical", canonical,
+				"hint", "update the waiver rule_id to the canonical name before the alias is removed")
+		})
+	}
+
 	eng, err := engine.Compile(cat)
 	if err != nil {
 		var ce *engine.CompileError
@@ -142,6 +208,17 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 	cache := eng.Prefetch(ctx, registry, dialect, 0)
 	results := eng.EvaluateWithCache(ctx, registry, dialect, cache)
 	duration := time.Since(evalStart)
+
+	// Annotate findings with operator-supplied waivers before the
+	// report renders or the exit-code gate runs. Active suppressions
+	// drop out of MaxFailingSeverity / fail-on; expired ones stay
+	// loud (CLAUDE.md §9).
+	if !waiverSet.Empty() {
+		waiverSet.Apply(scanStart, results)
+		logging.Logger().Info("doctor.scan.waivers.applied",
+			"count", waivers.AppliedCount(results),
+			"source", waiverSet.Source())
+	}
 
 	logRuleTimings(results)
 
@@ -228,22 +305,127 @@ func resolveTargetContext(cmd *cli.Command) (config.Context, error) {
 	return ctx, nil
 }
 
-// loadCatalog loads the embedded rule catalog and runs schema +
-// probe-name validation. Run before connect so a broken catalog fails
-// fast with exit 21 rather than after the operator's auth round-trip.
-func loadCatalog() (*rules.Catalog, error) {
-	cat, err := rules.LoadEmbedded()
+// applyProfile narrows and severity-overrides cat per the --profile
+// flag. Returns cat unchanged when no profile was selected. Loading or
+// looking up an unknown profile is a usage error (exit 2) — operators
+// see the available profile names in the message.
+//
+// Two correctness signals get emitted before returning:
+//
+//   - severity_overrides referencing rule IDs not in the catalog warn
+//     loud. A typo'd id silently no-ops at scan time otherwise, which
+//     can mean the rule ran with its default (lower) severity for
+//     months without anyone noticing.
+//   - A profile that filters down to zero rules warns at warn level.
+//     The scan continues so an operator developing a profile against
+//     a small catalog sees the empty result, but the message tells
+//     them the include_tags / rule_ids / skip_tags combo bit them.
+func applyProfile(cmd *cli.Command, cat *rules.Catalog) (*rules.Catalog, error) {
+	name := strings.TrimSpace(cmd.String("profile"))
+	if name == "" {
+		return cat, nil
+	}
+	pcat, err := profiles.LoadEmbedded()
 	if err != nil {
-		return nil, exit.Catalog("loading embedded rules: %s", err)
+		return nil, exit.Catalog("loading profiles: %s", err)
 	}
-	issues := cat.Validate()
-	issues = append(issues, cat.ValidateProbes(probes.IsKnown)...)
-	if len(issues) > 0 {
-		var msgs []string
-		for _, e := range issues {
-			msgs = append(msgs, e.Error())
+	prof, err := pcat.Get(name)
+	if err != nil {
+		return nil, exit.Usage("%s", err.Error())
+	}
+	if unknown := prof.UnknownSeverityOverrides(cat); len(unknown) > 0 {
+		logging.Logger().Warn("doctor.scan.profile.unknown_severity_overrides",
+			"profile", prof.Name,
+			"rule_ids", unknown,
+			"hint", "fix the rule_id or remove the override; the entry is currently a no-op")
+	}
+	out := prof.Apply(cat)
+	logging.Logger().Info("doctor.scan.profile.applied",
+		"profile", prof.Name,
+		"rules_in", len(cat.Rules),
+		"rules_out", len(out.Rules))
+	if len(out.Rules) == 0 {
+		logging.Logger().Warn("doctor.scan.profile.zero_rules_selected",
+			"profile", prof.Name,
+			"hint", "check include_tags / rule_ids / skip_tags — no rule survives the filter")
+	}
+	return out, nil
+}
+
+// aliasIndex builds a `deprecated_alias → canonical_id` map from the
+// catalog. Used by the cli to remap operator waivers keyed by an
+// older rule name; the alias-resolution itself lives in the waivers
+// package, this just lifts the join out of the rules package which
+// has no business knowing about waivers.
+func aliasIndex(cat *rules.Catalog) map[string]string {
+	if cat == nil || len(cat.Rules) == 0 {
+		return nil
+	}
+	out := map[string]string{}
+	for _, r := range cat.Rules {
+		for _, alias := range r.DeprecatedAliases {
+			if alias == "" || alias == r.ID {
+				continue
+			}
+			out[alias] = r.ID
 		}
-		return nil, exit.Catalog("rule catalog invalid:\n  %s", strings.Join(msgs, "\n  "))
 	}
-	return cat, nil
+	return out
+}
+
+// loadWaivers resolves the --waivers flag (or the documented default
+// search path) and returns the parsed Set. A missing default file is
+// silent — "no waivers" is the common state. A missing explicit
+// --waivers PATH is a usage error (exit 2): an operator who typed a
+// path expects it to exist.
+func loadWaivers(cmd *cli.Command) (*waivers.Set, error) {
+	if path := cmd.String("waivers"); path != "" {
+		set, err := waivers.Load(path)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil, exit.Usage("%s", err.Error())
+			}
+			return nil, exit.Catalog("%s", err.Error())
+		}
+		return set, nil
+	}
+	set, err := waivers.LoadDefault()
+	if err != nil {
+		return nil, exit.Catalog("%s", err.Error())
+	}
+	return set, nil
+}
+
+// applyScanFilters narrows cat by --rule-id / --tags / --skip-tags.
+// Runs after applyProfile so the flags layer onto the profile-selected
+// subset; an operator who picks `--profile prod --tags performance`
+// gets the intersection. Unknown rule IDs and tags warn loud — a
+// typo'd `--rule-id heeap_size` would otherwise silently filter to
+// zero rules and pass the gate.
+func applyScanFilters(cmd *cli.Command, cat *rules.Catalog) *rules.Catalog {
+	filter := catalogFilter{
+		RuleIDs:     cmd.StringSlice("rule-id"),
+		IncludeTags: cmd.StringSlice("tags"),
+		SkipTags:    cmd.StringSlice("skip-tags"),
+	}
+	if filter.IsEmpty() {
+		return cat
+	}
+	out, unknown := applyCatalogFilter(cat, filter)
+	if len(unknown) > 0 {
+		logging.Logger().Warn("doctor.scan.filter.unknown_selectors",
+			"selectors", unknown,
+			"hint", "fix the typo or remove the selector; the entry currently excludes nothing")
+	}
+	logging.Logger().Info("doctor.scan.filter.applied",
+		"rule_ids", filter.RuleIDs,
+		"tags", filter.IncludeTags,
+		"skip_tags", filter.SkipTags,
+		"rules_in", len(cat.Rules),
+		"rules_out", len(out.Rules))
+	if len(out.Rules) == 0 {
+		logging.Logger().Warn("doctor.scan.filter.zero_rules_selected",
+			"hint", "check --rule-id / --tags / --skip-tags — no rule survives the filter")
+	}
+	return out
 }

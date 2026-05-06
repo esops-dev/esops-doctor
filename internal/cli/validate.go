@@ -19,11 +19,12 @@ func validateRulesCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "validate-rules",
 		Usage: "Lint the rule catalog (schema check)",
-		Description: "Validates the embedded rule catalog and any rules in --rules-dir.\n" +
-			"Schema fields are checked, IDs verified unique, severities and dialects\n" +
-			"constrained, probe names resolved against the registered adapter set,\n" +
-			"and each rule's CEL condition is compiled to catch syntax and type\n" +
-			"errors.",
+		Description: "Validates the layered rule catalog: embedded core, --rules-dir, and\n" +
+			"the user rules.d directory ($XDG_CONFIG_HOME/esops-doctor/rules.d/, or\n" +
+			"$HOME/.config/esops-doctor/rules.d/). Schema fields are checked, IDs\n" +
+			"verified unique, severities and dialects constrained, probe names resolved\n" +
+			"against the registered adapter set, and each rule's CEL condition is\n" +
+			"compiled to catch syntax and type errors.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "rules-dir",
@@ -38,17 +39,16 @@ func validateRulesCommand() *cli.Command {
 
 // runValidateRules is split out for testability: tests can hand it
 // their own writers and inspect the resulting strings.
+//
+// Catalog assembly mirrors scan / list-rules / explain so an operator
+// validating a rule sees exactly what the rest of the tool would run
+// against. The per-issue stderr printing (one violation per line) is
+// unique to this command — operators iterating on a rule want each
+// problem addressable in isolation, not a single bundled error blob.
 func runValidateRules(stdout, stderr io.Writer, rulesDir string) error {
-	cat, err := rules.LoadEmbedded()
+	cat, err := assembleLayeredCatalog(rulesDir)
 	if err != nil {
-		return exit.Catalog("loading embedded rules: %s", err)
-	}
-	if rulesDir != "" {
-		extra, err := rules.LoadDir(rulesDir)
-		if err != nil {
-			return exit.Catalog("%s", err)
-		}
-		cat.Append(extra)
+		return err
 	}
 
 	issues := cat.Validate()

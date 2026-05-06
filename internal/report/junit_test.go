@@ -175,6 +175,53 @@ func TestJUnitQuietDropsPassAndSkipped(t *testing.T) {
 	}
 }
 
+// TestJUnitActiveWaiverRendersAsSkippedNotFailure encodes the contract
+// for CI consumers: a waived failing rule comes out as <skipped>, not
+// <failure>, so Jenkins/GitLab don't count it toward "build broken".
+// The justification rides in the message attribute. Expired waivers
+// stay as <failure> because the suppression failed and the row should
+// re-surface the loud pre-existing problem.
+func TestJUnitActiveWaiverRendersAsSkippedNotFailure(t *testing.T) {
+	live := failResult("a", "x", findings.SeverityCritical, "live")
+	waived := failResult("b", "x", findings.SeverityCritical, "waived")
+	waived.Finding.Suppression = &findings.Suppression{Justification: "approved"}
+	expired := failResult("c", "x", findings.SeverityCritical, "[waiver expired 2024-01-01] msg")
+	expired.Finding.Suppression = &findings.Suppression{Justification: "lapsed", Expired: true}
+
+	var buf bytes.Buffer
+	if err := JUnit(&buf, Header{Dialect: "elasticsearch"},
+		[]engine.RuleResult{live, waived, expired}, Options{}); err != nil {
+		t.Fatalf("JUnit: %v", err)
+	}
+	d := decodeJUnit(t, buf.Bytes())
+	suite := d.Suites[0]
+	cases := map[string]parsedCase{}
+	for _, c := range suite.TestCases {
+		cases[c.Name] = c
+	}
+
+	if cases["a"].Failure == nil || cases["a"].Skipped != nil {
+		t.Errorf("live row should be <failure>; got %+v", cases["a"])
+	}
+	if cases["b"].Skipped == nil || cases["b"].Failure != nil {
+		t.Errorf("active waiver row should be <skipped>; got %+v", cases["b"])
+	}
+	if !strings.Contains(cases["b"].Skipped.Message, "approved") {
+		t.Errorf("waiver justification should appear in skipped.message; got %q",
+			cases["b"].Skipped.Message)
+	}
+	if cases["c"].Failure == nil || cases["c"].Skipped != nil {
+		t.Errorf("expired-waiver row should still be <failure>; got %+v", cases["c"])
+	}
+
+	// Suite-level counts: live + expired are failures; waived counts as
+	// skipped so dashboards don't double-count it.
+	if suite.Failures != 2 || suite.Skipped != 1 {
+		t.Errorf("suite counts wrong: failures=%d skipped=%d (want 2/1)",
+			suite.Failures, suite.Skipped)
+	}
+}
+
 // TestJUnitEscapesAttributeContent guards the XML escaping path: a
 // rule message with `"` and `<` must come out well-formed so a
 // downstream JUnit parser doesn't fail at attribute-boundary chars.

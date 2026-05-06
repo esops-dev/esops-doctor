@@ -71,12 +71,16 @@ type Scan struct {
 
 // Summary is the per-status / per-severity tally surfaced alongside
 // the full results list. Mirrors the table renderer's footer counts so
-// the same numbers appear regardless of format.
+// the same numbers appear regardless of format. Waived counts the
+// active-waiver findings excluded from BySeverity / Failed; expired
+// waivers fall back into Failed and BySeverity because the suppression
+// failed and the finding fires loud (CLAUDE.md §9).
 type Summary struct {
 	Passed     int            `json:"passed" yaml:"passed"`
 	Failed     int            `json:"failed" yaml:"failed"`
 	Skipped    int            `json:"skipped" yaml:"skipped"`
 	Errored    int            `json:"errored" yaml:"errored"`
+	Waived     int            `json:"waived" yaml:"waived"`
 	BySeverity SeverityCounts `json:"by_severity" yaml:"by_severity"`
 }
 
@@ -94,8 +98,9 @@ type SeverityCounts struct {
 // Category, Severity, Description, Probe, Dialects, Tags) are
 // populated for *every* status — so a passing rule still tells a
 // reader what it checked and why it matters. Status-specific fields
-// (Message, Remediation, SkipReason, Error) only populate for the
-// status that produces them, kept tidy by `omitempty`.
+// (Message, Remediation, SkipReason, Error, Suppression) only
+// populate for the status that produces them, kept tidy by
+// `omitempty`.
 type Result struct {
 	RuleID      string                `json:"rule_id" yaml:"rule_id"`
 	Name        string                `json:"name,omitempty" yaml:"name,omitempty"`
@@ -111,6 +116,7 @@ type Result struct {
 	Remediation *findings.Remediation `json:"remediation,omitempty" yaml:"remediation,omitempty"`
 	SkipReason  string                `json:"skip_reason,omitempty" yaml:"skip_reason,omitempty"`
 	Error       string                `json:"error,omitempty" yaml:"error,omitempty"`
+	Suppression *findings.Suppression `json:"suppression,omitempty" yaml:"suppression,omitempty"`
 }
 
 // BuildDocument converts the engine's per-rule results into the wire
@@ -168,6 +174,7 @@ func buildSummary(results []engine.RuleResult) Summary {
 		Failed:  c.critical + c.error + c.warn + c.info,
 		Skipped: c.skipped,
 		Errored: c.errored,
+		Waived:  c.waived,
 		BySeverity: SeverityCounts{
 			Critical: c.critical,
 			Error:    c.error,
@@ -217,6 +224,10 @@ func toResult(r engine.RuleResult) Result {
 			if rem := r.Finding.Remediation; rem.Command != "" || rem.DocURL != "" {
 				rcopy := rem
 				out.Remediation = &rcopy
+			}
+			if sup := r.Finding.Suppression; sup != nil {
+				scopy := *sup
+				out.Suppression = &scopy
 			}
 		}
 	case engine.RuleStatusSkipped:

@@ -71,6 +71,9 @@ func Table(w io.Writer, h Header, results []engine.RuleResult, opts TableOptions
 		if err := writeFindings(w, h.Dialect, results); err != nil {
 			return err
 		}
+		if err := writeWaived(w, results); err != nil {
+			return err
+		}
 		if !opts.Quiet {
 			if err := writeSkipped(w, results); err != nil {
 				return err
@@ -81,9 +84,9 @@ func Table(w io.Writer, h Header, results []engine.RuleResult, opts TableOptions
 		}
 	}
 
-	_, err := fmt.Fprintf(w, "summary: %d critical, %d error, %d warn, %d info; %d passed, %d skipped, %d errored | %s\n",
+	_, err := fmt.Fprintf(w, "summary: %d critical, %d error, %d warn, %d info; %d passed, %d skipped, %d errored, %d waived | %s\n",
 		counts.critical, counts.error, counts.warn, counts.info,
-		counts.passed, counts.skipped, counts.errored,
+		counts.passed, counts.skipped, counts.errored, counts.waived,
 		formatHeader(h),
 	)
 	return err
@@ -124,10 +127,14 @@ func formatDuration(d time.Duration) string {
 }
 
 // summary is the per-status / per-severity tally surfaced in the footer
-// and used by the cli to decide the exit code.
+// and used by the cli to decide the exit code. Waived counts active
+// (non-expired) waivers; expired waivers fall back into the severity
+// columns because the suppression failed and the finding fires loud
+// (CLAUDE.md §9).
 type summary struct {
 	critical, error, warn, info int
 	passed, skipped, errored    int
+	waived                      int
 }
 
 func classify(results []engine.RuleResult) summary {
@@ -142,6 +149,10 @@ func classify(results []engine.RuleResult) summary {
 			s.errored++
 		case engine.RuleStatusFail:
 			if r.Finding == nil {
+				continue
+			}
+			if isActiveWaiver(r.Finding) {
+				s.waived++
 				continue
 			}
 			switch r.Finding.Severity {
@@ -159,13 +170,25 @@ func classify(results []engine.RuleResult) summary {
 	return s
 }
 
+// isActiveWaiver reports whether f carries a non-expired suppression.
+// Pulled out so the report and exit-code paths agree on a single
+// definition — drift between the two would let a build pass despite a
+// failure showing in the report (or vice versa).
+func isActiveWaiver(f *findings.Finding) bool {
+	return f != nil && f.Suppression != nil && !f.Suppression.Expired
+}
+
 // MaxFailingSeverity returns the most urgent severity across failing
-// rules, or SeverityUnknown when none failed. Used by the cli to gate
-// the exit code against --fail-on without re-walking the results.
+// rules, or SeverityUnknown when none failed. Findings with an active
+// (non-expired) waiver are excluded so the operator's documented
+// exception clears the --fail-on gate.
 func MaxFailingSeverity(results []engine.RuleResult) findings.Severity {
 	max := findings.SeverityUnknown
 	for _, r := range results {
 		if r.Status != engine.RuleStatusFail || r.Finding == nil {
+			continue
+		}
+		if isActiveWaiver(r.Finding) {
 			continue
 		}
 		if r.Finding.Severity > max {
@@ -175,10 +198,15 @@ func MaxFailingSeverity(results []engine.RuleResult) findings.Severity {
 	return max
 }
 
+// writeFindings emits the live-failure table: anything that fails and
+// either has no waiver or has one that's already expired. An expired
+// waiver lands in this table (its message already carries the
+// "[waiver expired …]" prefix from the waivers Apply step) so the
+// failure stays loud per CLAUDE.md §9.
 func writeFindings(w io.Writer, dialect string, results []engine.RuleResult) error {
 	var fails []engine.RuleResult
 	for _, r := range results {
-		if r.Status == engine.RuleStatusFail {
+		if r.Status == engine.RuleStatusFail && !isActiveWaiver(r.Finding) {
 			fails = append(fails, r)
 		}
 	}
@@ -198,6 +226,40 @@ func writeFindings(w io.Writer, dialect string, results []engine.RuleResult) err
 			sev = "?"
 		}
 		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", sev, f.RuleID, f.Category, oneLine(f.Message)); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
+// writeWaived emits the active-waiver section. Listed separately from
+// the live-failure table so an operator scanning the report can see
+// "what would have failed but is documented as accepted" — and so that
+// expanding the waivers file or letting one expire doesn't change
+// where the row lives.
+func writeWaived(w io.Writer, results []engine.RuleResult) error {
+	var waived []engine.RuleResult
+	for _, r := range results {
+		if r.Status == engine.RuleStatusFail && isActiveWaiver(r.Finding) {
+			waived = append(waived, r)
+		}
+	}
+	if len(waived) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w, "\nwaived (%d):\n", len(waived)); err != nil {
+		return err
+	}
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	for _, r := range waived {
+		f := r.Finding
+		sup := f.Suppression
+		exp := "no expiry"
+		if sup.ExpiresAt != nil {
+			exp = "expires " + sup.ExpiresAt.UTC().Format("2006-01-02")
+		}
+		if _, err := fmt.Fprintf(tw, "  %s\t%s\t%s\n",
+			r.RuleID, exp, oneLine(sup.Justification)); err != nil {
 			return err
 		}
 	}
