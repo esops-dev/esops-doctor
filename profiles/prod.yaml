@@ -3,10 +3,19 @@ description: Production scans. Promotes hygiene checks toward critical.
 
 severity_overrides:
   heap_size: critical
+  tls_transport: critical
+  tls_insecure_skip_verify: critical
+  node_to_node_encryption: critical
+  security_disabled: critical
+  snapshot_repository_configured: critical
+  unassigned_shards: critical
   bootstrap_memory_lock: critical
   default_credentials: critical
-  tls_transport: critical
-  anonymous_access: critical
+  destructive_requires_name: critical
+  permissive_superuser_role: error
+  dedicated_master_nodes: error
+  disk_watermarks: error
+  max_file_descriptors_low: error
 
 skip_tags: []
 include_tags: []

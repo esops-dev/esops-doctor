@@ -1,0 +1,24 @@
+checks:
+  - id: security_disabled
+    name: Cluster security is disabled
+    category: security
+    severity: critical
+    description: >
+      Reports a cluster where the security model is off entirely —
+      Elasticsearch with xpack.security.enabled=false, or OpenSearch
+      with the security plugin absent. Anonymous read/write to every
+      index is an outright data exposure; this is the highest-priority
+      finding doctor surfaces.
+    probe: security_audit
+    condition: |
+      has(self.status) && has(self.status.enabled) && self.status.enabled == true
+    count_expression: |
+      (has(self.status) && has(self.status.enabled) && self.status.enabled == true) ? 0 : 1
+    message: Cluster security is disabled — anonymous access is unrestricted.
+    remediation:
+      command: Enable xpack.security on Elasticsearch (or install the security plugin on OpenSearch), configure realms/roles, and restart the cluster
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/secure-cluster.html
+    tags: [prod, security]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: high

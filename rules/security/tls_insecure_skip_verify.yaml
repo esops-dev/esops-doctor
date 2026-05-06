@@ -1,0 +1,25 @@
+checks:
+  - id: tls_insecure_skip_verify
+    name: Cluster context skips TLS verification
+    category: security
+    severity: error
+    description: >
+      The configured context turns off TLS certificate validation
+      (`insecure: true`). Connections look encrypted but accept any
+      certificate, including a man-in-the-middle's. Acceptable only as
+      a one-shot during initial bootstrap; never as a steady state.
+    probe: security_audit
+    condition: |
+      !has(self.tls) || !has(self.tls.insecure_skip_verify) ||
+      self.tls.insecure_skip_verify == false
+    count_expression: |
+      (has(self.tls) && has(self.tls.insecure_skip_verify) &&
+       self.tls.insecure_skip_verify == true) ? 1 : 0
+    message: Cluster context has insecure_skip_verify=true; TLS chain is not validated.
+    remediation:
+      command: "Trust the cluster's CA via the context's cacert path and remove `insecure: true`"
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/security-basic-setup-https.html
+    tags: [prod, security, tls]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: low

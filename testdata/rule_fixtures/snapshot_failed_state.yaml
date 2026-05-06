@@ -1,0 +1,35 @@
+rule: snapshot_failed_state
+cases:
+  - name: empty snapshot list passes
+    expect: pass
+    data: []
+
+  - name: every snapshot is SUCCESS
+    expect: pass
+    data:
+      - repository: prod
+        name: daily-2024-09-01
+        state: SUCCESS
+        shards_total: 12
+        shards_successful: 12
+      - repository: prod
+        name: daily-2024-09-02
+        state: SUCCESS
+
+  - name: in-progress snapshot is fine
+    expect: pass
+    data:
+      - repository: prod
+        name: daily-2024-09-03
+        state: IN_PROGRESS
+
+  - name: one FAILED snapshot fails
+    expect: fail
+    data:
+      - repository: prod
+        name: daily-2024-09-01
+        state: SUCCESS
+      - repository: prod
+        name: daily-2024-09-02
+        state: FAILED
+        shards_failed: 3

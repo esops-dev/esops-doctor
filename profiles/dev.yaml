@@ -2,9 +2,25 @@ name: dev
 description: Local development. Demotes hygiene findings toward info.
 
 severity_overrides:
-  bootstrap_memory_lock: info
   dedicated_master_nodes: info
+  unassigned_shards: info
+  delayed_unassigned_shards: info
+  cluster_health_status: info
+  disk_watermarks: info
+  ilm_policy_present: info
+  ism_policy_present: info
+  snapshot_repository_configured: info
+  api_keys_no_expiration: info
+  bootstrap_memory_lock: info
+  bootstrap_check_warnings: info
+  max_file_descriptors_low: info
+  destructive_requires_name: info
   zone_awareness: info
+  shard_count_per_node: info
+  dynamic_mapping_strict: info
+  default_credentials: info
+  script_limits: info
+  node_to_node_encryption: info
 
 skip_tags:
   - prod-only

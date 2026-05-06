@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -223,6 +224,16 @@ func TestValidateRulesLayersUserRulesDir(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(filepath.Join(xdg, "esops-doctor")) })
+
+	// Baseline run before the user rule lands so we can assert the
+	// count grew by exactly one rather than hard-coding a number that
+	// rots every time the embedded catalog grows.
+	var baseOut, baseErr bytes.Buffer
+	if err := runValidateRules(&baseOut, &baseErr, ""); err != nil {
+		t.Fatalf("runValidateRules baseline: %v", err)
+	}
+	baseN := parseValidatedCount(t, baseOut.String())
+
 	body := []byte(`checks:
   - id: validate_user_rule
     name: User Rule
@@ -245,11 +256,28 @@ func TestValidateRulesLayersUserRulesDir(t *testing.T) {
 	if !strings.Contains(out.String(), "OK:") {
 		t.Errorf("expected OK summary; got stdout=%q stderr=%q", out.String(), errOut.String())
 	}
-	// The OK line carries a count; with one shipped rule + one user
-	// rule we expect at least 2.
-	if !strings.Contains(out.String(), "2 rule(s)") {
-		t.Errorf("expected 2 rule(s) counted; got %q", out.String())
+	if got := parseValidatedCount(t, out.String()); got != baseN+1 {
+		t.Errorf("validated count = %d, want %d (baseline %d + 1 user rule)", got, baseN+1, baseN)
 	}
+}
+
+// parseValidatedCount extracts N from "OK: N rule(s) validated\n".
+// Used to assert that user-dir rule layering increases the count by
+// the expected delta without hard-coding the embedded catalog size.
+func parseValidatedCount(t *testing.T, stdout string) int {
+	t.Helper()
+	const prefix = "OK: "
+	const suffix = " rule(s)"
+	i := strings.Index(stdout, prefix)
+	j := strings.Index(stdout, suffix)
+	if i < 0 || j < 0 || j <= i+len(prefix) {
+		t.Fatalf("could not parse rule count from %q", stdout)
+	}
+	var n int
+	if _, err := fmt.Sscanf(stdout[i+len(prefix):j], "%d", &n); err != nil {
+		t.Fatalf("could not parse rule count from %q: %v", stdout, err)
+	}
+	return n
 }
 
 func TestValidateRulesSurfacesUserDirIssues(t *testing.T) {

@@ -105,15 +105,15 @@ func globalFlags() []cli.Flag {
 
 // implementedOutputFormats lists the formats the report layer can
 // actually render today. Add a name here once a renderer lands; until
-// then, passing the format value silently fell through to a table —
-// which CLAUDE.md §10 explicitly warns against ("scriptable" formats
-// must be honoured exactly). Better to reject loudly with exit 2.
+// then, passing the format value would silently fall through to a
+// table — and "scriptable" formats must be honoured exactly. Better
+// to reject loudly with exit 2.
 var implementedOutputFormats = []string{"table", "json", "yaml", "sarif", "junit", "html"}
 
-// plannedOutputFormats lists the formats CLAUDE.md §10 promises but
+// plannedOutputFormats lists formats the project promises but that
 // have not landed yet. Listed separately so the error message tells
 // the operator the format is *known* but not yet wired, rather than
-// rejected as a typo. Empty for now: every format §10 names is wired.
+// rejected as a typo. Empty for now: every promised format is wired.
 var plannedOutputFormats = []string{}
 
 func validateOutput(s string) error {

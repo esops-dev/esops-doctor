@@ -1,0 +1,24 @@
+checks:
+  - id: ilm_policy_present
+    name: At least one ILM policy is defined
+    category: lifecycle
+    severity: warn
+    description: >
+      Time-series workloads on Elasticsearch belong on an Index
+      Lifecycle Management policy so hot/warm/cold/delete transitions
+      are automated rather than relying on manual rollover. A cluster
+      with zero ILM policies is either pre-prod or has retention gaps;
+      surface the absence so the operator can decide.
+    probe: ilm_state
+    condition: |
+      size(self) > 0
+    count_expression: |
+      size(self)
+    message: No ILM policies are defined; time-series indices have no automated retention.
+    remediation:
+      command: Define a policy with `esops index ilm apply --policy <name>`
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/index-lifecycle-management.html
+    tags: [prod, retention]
+    dialects: [elasticsearch]
+    affected_versions: ["7.x", "8.x", "9.x"]
+    effort: medium

@@ -63,8 +63,8 @@ func TestTableLinesUpFindingsAndSummary(t *testing.T) {
 }
 
 func TestTableSurfacesSkippedReasons(t *testing.T) {
-	// CLAUDE.md §3: Skipped is reported (not silent) so an operator
-	// sees that a rule was inapplicable rather than absent.
+	// Skipped is reported (not silent) so an operator sees that a
+	// rule was inapplicable rather than absent.
 	results := []engine.RuleResult{
 		{RuleID: "ilm_policy", Status: engine.RuleStatusSkipped, SkipReason: "rule does not support dialect \"opensearch\""},
 		{RuleID: "tls_only_audit", Status: engine.RuleStatusSkipped, SkipReason: "probe \"security_audit\" not registered"},
@@ -236,7 +236,7 @@ func TestActiveWaiverDropsFromSeverityCountsAndMax(t *testing.T) {
 	}
 }
 
-// TestExpiredWaiverStaysLoud locks in the CLAUDE.md §9 guarantee:
+// TestExpiredWaiverStaysLoud locks in the expired-waiver guarantee:
 // the finding contributes to severity counts and the --fail-on max
 // even when the operator's waiver matched, because the waiver expired.
 func TestExpiredWaiverStaysLoud(t *testing.T) {

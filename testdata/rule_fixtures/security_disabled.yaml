@@ -1,0 +1,32 @@
+rule: security_disabled
+cases:
+  - name: security enabled passes
+    expect: pass
+    data:
+      tls:
+        scheme: https
+        insecure_skip_verify: false
+        cacert_set: true
+        auth_type: basic
+      status:
+        dialect: elasticsearch
+        enabled: true
+
+  - name: security disabled fails
+    expect: fail
+    data:
+      tls:
+        scheme: http
+        insecure_skip_verify: false
+        cacert_set: false
+        auth_type: none
+      status:
+        dialect: elasticsearch
+        enabled: false
+        note: security disabled on this cluster
+
+  - name: status block missing fails
+    expect: fail
+    data:
+      tls:
+        scheme: http

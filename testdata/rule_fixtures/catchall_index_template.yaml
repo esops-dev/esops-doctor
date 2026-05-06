@@ -1,0 +1,29 @@
+rule: catchall_index_template
+cases:
+  - name: empty template list passes
+    expect: pass
+    data: []
+
+  - name: specific patterns only
+    expect: pass
+    data:
+      - name: logs
+        index_patterns: ["logs-*"]
+        priority: 200
+      - name: metrics
+        index_patterns: ["metrics-*", "telemetry-*"]
+        priority: 100
+
+  - name: bare star pattern flags
+    expect: fail
+    data:
+      - name: catchall
+        index_patterns: ["*"]
+        priority: 1
+
+  - name: star mixed with specific pattern flags
+    expect: fail
+    data:
+      - name: messy
+        index_patterns: ["logs-*", "*"]
+        priority: 50

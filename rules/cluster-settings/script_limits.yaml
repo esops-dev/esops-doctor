@@ -1,0 +1,32 @@
+checks:
+  - id: script_limits
+    name: Scripting policy not narrowed
+    category: security
+    severity: warn
+    description: >
+      The default script.allowed_types is "all" — both inline and
+      stored scripts are accepted. In a production cluster, a
+      compromised application credential plus an inline-script
+      privilege escalates to arbitrary code execution on the master.
+      Recommended posture is `script.allowed_types: stored` paired
+      with reviewed stored scripts. Flag any cluster where the
+      setting is unset, leaving the permissive default in place.
+    probe: cluster_settings_full
+    condition: |
+      (has(self.persistent) &&
+       'script.allowed_types' in self.persistent) ||
+      (has(self.transient) &&
+       'script.allowed_types' in self.transient)
+    count_expression: |
+      ((has(self.persistent) &&
+        'script.allowed_types' in self.persistent) ||
+       (has(self.transient) &&
+        'script.allowed_types' in self.transient)) ? 0 : 1
+    message: script.allowed_types is not narrowed; inline scripting is enabled by default.
+    remediation:
+      command: Set persistent script.allowed_types=stored (or =none) via PUT /_cluster/settings, then store any required scripts via /_scripts
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/allowed-script-types-setting.html
+    tags: [prod, security]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

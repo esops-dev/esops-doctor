@@ -1,0 +1,30 @@
+rule: tls_insecure_skip_verify
+cases:
+  - name: skip_verify off passes
+    expect: pass
+    data:
+      tls:
+        scheme: https
+        insecure_skip_verify: false
+        cacert_set: true
+      status:
+        dialect: elasticsearch
+        enabled: true
+
+  - name: tls block missing passes (nothing to check)
+    expect: pass
+    data:
+      status:
+        dialect: elasticsearch
+        enabled: true
+
+  - name: skip_verify true fails
+    expect: fail
+    data:
+      tls:
+        scheme: https
+        insecure_skip_verify: true
+        cacert_set: false
+      status:
+        dialect: elasticsearch
+        enabled: true

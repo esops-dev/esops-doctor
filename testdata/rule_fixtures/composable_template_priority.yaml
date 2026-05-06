@@ -1,0 +1,31 @@
+rule: composable_template_priority
+cases:
+  - name: empty template list passes
+    expect: pass
+    data: []
+
+  - name: every template has positive priority
+    expect: pass
+    data:
+      - name: logs
+        index_patterns: ["logs-*"]
+        priority: 200
+      - name: metrics
+        index_patterns: ["metrics-*"]
+        priority: 100
+
+  - name: missing priority field flags
+    expect: fail
+    data:
+      - name: logs
+        index_patterns: ["logs-*"]
+      - name: metrics
+        index_patterns: ["metrics-*"]
+        priority: 100
+
+  - name: explicit zero priority flags
+    expect: fail
+    data:
+      - name: catchall
+        index_patterns: ["my-*"]
+        priority: 0

@@ -36,7 +36,7 @@ func TestListRulesDefaultTable(t *testing.T) {
 	for _, want := range []string{
 		"ID", "SEVERITY", "CATEGORY", "DIALECTS", "TAGS",
 		"heap_size", "critical", "resource_sanity", "elasticsearch,opensearch",
-		"1 rule(s)",
+		"rule(s)",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("table output missing %q\nfull output:\n%s", want, out)
@@ -67,8 +67,15 @@ func TestListRulesJSONOutput(t *testing.T) {
 	if doc.SchemaVersion != 1 {
 		t.Errorf("schema_version = %d, want 1", doc.SchemaVersion)
 	}
-	if len(doc.Rules) == 0 || doc.Rules[0].ID != "heap_size" {
-		t.Errorf("expected heap_size in first slot; got %+v", doc.Rules)
+	var found bool
+	for _, r := range doc.Rules {
+		if r.ID == "heap_size" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected heap_size in rules list; got %+v", doc.Rules)
 	}
 }
 
@@ -159,16 +166,13 @@ func TestListRulesSkipTagFilter(t *testing.T) {
 	root := newRoot()
 	root.Writer = &stdout
 	if err := root.Run(context.Background(), []string{
-		"esops-doctor", "list-rules", "--skip-tags", "prod",
+		"esops-doctor", "list-rules", "--skip-tags", "performance",
 	}); err != nil {
 		t.Fatalf("list-rules: %v", err)
 	}
-	// heap_size has tag "prod" and should be filtered out.
+	// heap_size has tag "performance" and should be filtered out.
 	if strings.Contains(stdout.String(), "heap_size") {
 		t.Errorf("expected heap_size to be filtered out; got %q", stdout.String())
-	}
-	if !strings.Contains(stdout.String(), "No rules match") {
-		t.Errorf("expected empty-result message; got %q", stdout.String())
 	}
 }
 
@@ -205,8 +209,8 @@ func TestListRulesPicksUpRulesDir(t *testing.T) {
 func TestListRulesPicksUpUserRulesDir(t *testing.T) {
 	// TestMain pins XDG_CONFIG_HOME to a tempdir so we control where
 	// userRulesDir points. Drop a rule there and confirm list-rules
-	// surfaces it without a --rules-dir flag — the CLAUDE.md §7 user-
-	// override path.
+	// surfaces it without a --rules-dir flag — the user-overrides
+	// rule-loading path documented in the catalog loader.
 	xdg := os.Getenv("XDG_CONFIG_HOME")
 	if xdg == "" {
 		t.Skip("XDG_CONFIG_HOME not set in test env")

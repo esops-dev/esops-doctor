@@ -3,10 +3,17 @@ description: Pre-production. Same selection as prod, one severity tier softer.
 
 severity_overrides:
   heap_size: error
+  tls_transport: error
+  tls_insecure_skip_verify: error
+  node_to_node_encryption: error
+  security_disabled: error
+  snapshot_repository_configured: error
+  unassigned_shards: error
   bootstrap_memory_lock: error
   default_credentials: error
-  tls_transport: error
-  anonymous_access: error
+  destructive_requires_name: error
+  permissive_superuser_role: warn
+  dedicated_master_nodes: warn
 
 skip_tags: []
 include_tags: []

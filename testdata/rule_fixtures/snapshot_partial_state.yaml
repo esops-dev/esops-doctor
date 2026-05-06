@@ -1,0 +1,27 @@
+rule: snapshot_partial_state
+cases:
+  - name: empty snapshot list passes
+    expect: pass
+    data: []
+
+  - name: every snapshot SUCCESS
+    expect: pass
+    data:
+      - repository: prod
+        name: daily-2024-09-01
+        state: SUCCESS
+
+  - name: PARTIAL snapshot flags
+    expect: fail
+    data:
+      - repository: prod
+        name: daily-2024-09-01
+        state: PARTIAL
+        shards_failed: 2
+
+  - name: INCOMPATIBLE snapshot flags
+    expect: fail
+    data:
+      - repository: prod
+        name: legacy-2020-08-01
+        state: INCOMPATIBLE

@@ -1,0 +1,30 @@
+rule: tls_transport
+cases:
+  - name: https scheme passes
+    expect: pass
+    data:
+      tls:
+        scheme: https
+        insecure_skip_verify: false
+        cacert_set: true
+      status:
+        dialect: elasticsearch
+        enabled: true
+
+  - name: http scheme fails
+    expect: fail
+    data:
+      tls:
+        scheme: http
+        insecure_skip_verify: false
+        cacert_set: false
+      status:
+        dialect: elasticsearch
+        enabled: true
+
+  - name: tls block missing fails
+    expect: fail
+    data:
+      status:
+        dialect: opensearch
+        enabled: true

@@ -1,0 +1,31 @@
+checks:
+  - id: snapshot_partial_state
+    name: Snapshots in PARTIAL or INCOMPATIBLE state
+    category: lifecycle
+    severity: warn
+    description: >
+      A snapshot in PARTIAL state captured some shards but not all; an
+      INCOMPATIBLE snapshot was taken on a cluster version the current
+      version cannot restore. Either way the entry is surprise-shaped
+      for a future operator running `snapshot restore`. Flag both so
+      the schedule can be cleaned up.
+    probe: snapshots
+    condition: |
+      size(self) == 0 ||
+      self.all(s,
+        !has(s.state) ||
+        (s.state != 'PARTIAL' && s.state != 'INCOMPATIBLE')
+      )
+    count_expression: |
+      size(self.filter(s,
+        has(s.state) &&
+        (s.state == 'PARTIAL' || s.state == 'INCOMPATIBLE')
+      ))
+    message: '{{count}} snapshot(s) in PARTIAL or INCOMPATIBLE state.'
+    remediation:
+      command: Prune the affected snapshots and re-run a clean schedule once the underlying cause (failed shards, version skew) is fixed
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/delete-snapshot-api.html
+    tags: [prod, recoverability]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: low

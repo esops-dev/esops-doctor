@@ -1,0 +1,32 @@
+checks:
+  - id: pending_task_accumulation
+    name: Cluster pending tasks have accumulated
+    category: hygiene
+    severity: warn
+    description: >
+      A pending cluster-state update sitting in the queue for more
+      than 30 seconds means the master node is bottlenecked — typical
+      causes are a master under-resourced for the cluster size, a
+      paused master election, or a flood of mapping updates from a
+      misconfigured client. The threshold is intentionally loose;
+      transient queue depth is normal during shard relocations.
+    probe: pending_tasks
+    condition: |
+      size(self) == 0 ||
+      self.all(t,
+        !has(t.time_in_queue_millis) ||
+        int(t.time_in_queue_millis) < 30000
+      )
+    count_expression: |
+      size(self.filter(t,
+        has(t.time_in_queue_millis) &&
+        int(t.time_in_queue_millis) >= 30000
+      ))
+    message: '{{count}} pending task(s) sitting in queue for ≥30 s.'
+    remediation:
+      command: Check the master node's load, GC pauses, and the source field of each pending task to identify the bottleneck
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-pending.html
+    tags: [hygiene, performance]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

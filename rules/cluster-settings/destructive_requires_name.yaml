@@ -1,0 +1,35 @@
+checks:
+  - id: destructive_requires_name
+    name: action.destructive_requires_name not enforced
+    category: destructive_ops
+    severity: error
+    description: >
+      With action.destructive_requires_name=true the cluster refuses
+      bulk-destructive APIs (DELETE _all, DELETE *) that would otherwise
+      let a typo wipe every index. ES 8+ defaults to true; ES 7 and
+      OpenSearch default to false. Flag any cluster where the setting
+      is not explicitly "true" so the operator's safety knob is on the
+      record rather than relying on a version-dependent default.
+    probe: cluster_settings_full
+    condition: |
+      (has(self.persistent) &&
+       'action.destructive_requires_name' in self.persistent &&
+       string(self.persistent['action.destructive_requires_name']) == 'true') ||
+      (has(self.transient) &&
+       'action.destructive_requires_name' in self.transient &&
+       string(self.transient['action.destructive_requires_name']) == 'true')
+    count_expression: |
+      ((has(self.persistent) &&
+        'action.destructive_requires_name' in self.persistent &&
+        string(self.persistent['action.destructive_requires_name']) == 'true') ||
+       (has(self.transient) &&
+        'action.destructive_requires_name' in self.transient &&
+        string(self.transient['action.destructive_requires_name']) == 'true')) ? 0 : 1
+    message: action.destructive_requires_name is not set to "true".
+    remediation:
+      command: Set persistent action.destructive_requires_name to true via PUT /_cluster/settings
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-update-settings.html
+    tags: [prod, destructive_ops]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: low

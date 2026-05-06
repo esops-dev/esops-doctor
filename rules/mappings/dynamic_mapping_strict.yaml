@@ -1,0 +1,35 @@
+checks:
+  - id: dynamic_mapping_strict
+    name: Index allows dynamic mapping
+    category: mappings
+    severity: warn
+    description: >
+      With dynamic mapping enabled (the cluster default), unknown
+      fields in incoming documents silently become new mapping
+      entries — a single misconfigured client can push the index past
+      its total_fields.limit, blowing up indexing for every other
+      writer. Recommended posture for production indices is `dynamic:
+      strict` (rejects unknown fields) or `dynamic: false` (ignores
+      them). System indices (dot-prefixed) and data-stream backing
+      indices are excluded — their mapping is the cluster's call.
+    probe: mappings
+    condition: |
+      size(self) == 0 ||
+      self.all(idx,
+        !has(idx.name) ||
+        idx.name.startsWith('.') ||
+        (has(idx.dynamic) && (idx.dynamic == 'strict' || idx.dynamic == 'false'))
+      )
+    count_expression: |
+      size(self.filter(idx,
+        has(idx.name) && !idx.name.startsWith('.') &&
+        (!has(idx.dynamic) || (idx.dynamic != 'strict' && idx.dynamic != 'false'))
+      ))
+    message: '{{count}} non-system index/indices accept dynamic mapping.'
+    remediation:
+      command: "Set `dynamic: strict` (or `false`) on the index template so future indices reject (or ignore) unknown fields, and run a reindex if the existing mapping needs the same posture"
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/dynamic.html
+    tags: [prod, mappings]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

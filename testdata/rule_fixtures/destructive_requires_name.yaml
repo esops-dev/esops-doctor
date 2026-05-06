@@ -1,0 +1,28 @@
+rule: destructive_requires_name
+cases:
+  - name: persistent set to "true" passes
+    expect: pass
+    data:
+      persistent:
+        "action.destructive_requires_name": "true"
+      transient: {}
+
+  - name: transient set to "true" passes
+    expect: pass
+    data:
+      persistent: {}
+      transient:
+        "action.destructive_requires_name": "true"
+
+  - name: not set anywhere flags
+    expect: fail
+    data:
+      persistent: {}
+      transient: {}
+
+  - name: explicitly "false" flags
+    expect: fail
+    data:
+      persistent:
+        "action.destructive_requires_name": "false"
+      transient: {}

@@ -39,10 +39,10 @@ func TestJSONShapeNilTypedSliceBecomesEmpty(t *testing.T) {
 
 // nestedFixture mimics the shape probe results carry: nested structs
 // with slice fields and a slice-of-structs each with their own slice
-// field. The CLAUDE.md §3 case for this is RecoveryReport.Indices
-// being nil on a freshly-bootstrapped cluster — the json round-trip
-// would marshal the nil to "null" and CEL would reject the
-// `self.indices.all(...)` traversal.
+// field. The motivating case is RecoveryReport.Indices being nil on a
+// freshly-bootstrapped cluster — the json round-trip would marshal the
+// nil to "null" and CEL would reject the `self.indices.all(...)`
+// traversal.
 type nestedFixture struct {
 	Name    string             `json:"name"`
 	Indices []nestedIndex      `json:"indices"`           // top-level field; non-nil after denil

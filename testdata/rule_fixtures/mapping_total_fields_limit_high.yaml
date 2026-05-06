@@ -1,0 +1,54 @@
+rule: mapping_total_fields_limit_high
+cases:
+  - name: empty index list passes
+    expect: pass
+    data: []
+
+  - name: default settings pass
+    expect: pass
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            number_of_shards: "1"
+            number_of_replicas: "1"
+
+  - name: limit at default-friendly 1000 passes
+    expect: pass
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            mapping:
+              total_fields:
+                limit: "1000"
+
+  - name: limit raised to 5000 still passes (boundary)
+    expect: pass
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            mapping:
+              total_fields:
+                limit: "5000"
+
+  - name: limit pushed to 50000 flags
+    expect: fail
+    data:
+      - index: wide-events
+        settings:
+          index:
+            mapping:
+              total_fields:
+                limit: "50000"
+
+  - name: numeric (non-string) limit also flags
+    expect: fail
+    data:
+      - index: wide-events
+        settings:
+          index:
+            mapping:
+              total_fields:
+                limit: 10000

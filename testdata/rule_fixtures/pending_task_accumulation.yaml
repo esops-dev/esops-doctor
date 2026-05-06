@@ -1,0 +1,37 @@
+rule: pending_task_accumulation
+cases:
+  - name: empty queue passes
+    expect: pass
+    data: []
+
+  - name: short tasks pass
+    expect: pass
+    data:
+      - insert_order: 1
+        priority: URGENT
+        source: shard-failed
+        time_in_queue_millis: 250
+      - insert_order: 2
+        priority: HIGH
+        source: create-index
+        time_in_queue_millis: 5000
+
+  - name: 30s task flags
+    expect: fail
+    data:
+      - insert_order: 1
+        priority: URGENT
+        source: shard-failed
+        time_in_queue_millis: 30000
+
+  - name: many old tasks flag
+    expect: fail
+    data:
+      - insert_order: 1
+        priority: HIGH
+        source: put-mapping
+        time_in_queue_millis: 60000
+      - insert_order: 2
+        priority: NORMAL
+        source: cluster-update-settings
+        time_in_queue_millis: 45000

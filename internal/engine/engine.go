@@ -210,8 +210,8 @@ func (s RuleStatus) String() string {
 //     SkipReason carries the human-readable cause.
 //   - Error:   probe fetch or CEL evaluation threw. Err carries the cause.
 //
-// Skipped is reported (not silent) per CLAUDE.md §3 so an operator
-// sees that a rule was inapplicable rather than absent.
+// Skipped is reported (not silent) so an operator sees that a rule
+// was inapplicable rather than absent.
 //
 // Rule is the full rule definition, included so renderers can show
 // rule metadata (name, category, severity, description, dialects,

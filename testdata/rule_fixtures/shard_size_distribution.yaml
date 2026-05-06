@@ -1,0 +1,45 @@
+rule: shard_size_distribution
+cases:
+  - name: empty index list passes
+    expect: pass
+    data: []
+
+  - name: 5 GiB shard each is comfortably under 50 GiB
+    expect: pass
+    data:
+      - name: logs-2024-09
+        status: open
+        primaries: 4
+        primary_store_bytes: 21474836480   # 20 GiB total / 4 = 5 GiB each
+
+  - name: closed index ignored
+    expect: pass
+    data:
+      - name: logs-2023-archive
+        status: close
+        primaries: 1
+        primary_store_bytes: 107374182400  # 100 GiB
+
+  - name: system index ignored
+    expect: pass
+    data:
+      - name: .ds-fleet-actions-results-2024.08-000001
+        status: open
+        primaries: 1
+        primary_store_bytes: 64424509440   # 60 GiB
+
+  - name: 60 GiB average primary shard size flags
+    expect: fail
+    data:
+      - name: logs-2024-09
+        status: open
+        primaries: 1
+        primary_store_bytes: 64424509440   # 60 GiB
+
+  - name: 200 GiB across 2 primaries (100 GiB each) flags
+    expect: fail
+    data:
+      - name: events-2024
+        status: open
+        primaries: 2
+        primary_store_bytes: 214748364800  # 200 GiB

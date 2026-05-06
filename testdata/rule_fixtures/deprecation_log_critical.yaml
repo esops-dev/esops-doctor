@@ -1,0 +1,38 @@
+rule: deprecation_log_critical
+cases:
+  - name: empty deprecation log passes
+    expect: pass
+    data: []
+
+  - name: only warnings pass
+    expect: pass
+    data:
+      - category: cluster_settings
+        level: warning
+        message: setting xyz is deprecated
+      - category: index_settings
+        target: legacy-index
+        level: warning
+        message: index uses deprecated mapping type
+
+  - name: one critical deprecation fails
+    expect: fail
+    data:
+      - category: cluster_settings
+        level: warning
+        message: setting xyz is deprecated
+      - category: node_settings
+        level: critical
+        message: cluster cannot be upgraded with this setting present
+        url: https://www.elastic.co/guide/en/elasticsearch/reference/current/release-notes.html
+
+  - name: multiple criticals fail
+    expect: fail
+    data:
+      - category: cluster_settings
+        level: critical
+        message: A
+      - category: data_streams
+        target: logs
+        level: critical
+        message: B

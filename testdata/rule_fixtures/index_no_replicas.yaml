@@ -1,0 +1,37 @@
+rule: index_no_replicas
+cases:
+  - name: empty list passes
+    expect: pass
+    data: []
+
+  - name: index with one replica passes
+    expect: pass
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            number_of_replicas: "1"
+
+  - name: system index with zero replicas ignored
+    expect: pass
+    data:
+      - index: .ds-fleet-actions-results
+        settings:
+          index:
+            number_of_replicas: "0"
+
+  - name: user index with zero replicas flags
+    expect: fail
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            number_of_replicas: "0"
+
+  - name: numeric replicas value also handled
+    expect: fail
+    data:
+      - index: events
+        settings:
+          index:
+            number_of_replicas: 0

@@ -1,0 +1,23 @@
+checks:
+  - id: snapshot_repository_configured
+    name: At least one snapshot repository is registered
+    category: lifecycle
+    severity: critical
+    description: >
+      A cluster with no registered snapshot repository has no path to
+      recovery short of restoring source-of-truth elsewhere. Surface
+      the absence loudly — this is a critical-severity finding because
+      a single hardware failure becomes data loss without it.
+    probe: snapshot_repositories
+    condition: |
+      size(self) > 0
+    count_expression: |
+      size(self)
+    message: No snapshot repository is registered; the cluster has no backup path.
+    remediation:
+      command: Register a repository with `esops snapshot repo register --name <repo> --type <fs|s3|gcs|azure>` and schedule recurring snapshots
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/snapshots-register-repository.html
+    tags: [prod, recoverability]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

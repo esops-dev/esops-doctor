@@ -1,0 +1,39 @@
+rule: heap_size
+cases:
+  - name: 8 GiB heap on 32 GiB host
+    expect: pass
+    data:
+      - name: n1
+        jvm:
+          heap:
+            init_bytes: 8589934592   # 8 GiB
+            max_bytes: 8589934592    # 8 GiB
+        os:
+          total_physical_memory_bytes: 34359738368  # 32 GiB
+
+  - name: coordinating-only node with no JVM info skipped
+    expect: pass
+    data:
+      - name: coord-1
+
+  - name: 32 GiB heap exceeds 31 GiB cap
+    expect: fail
+    data:
+      - name: n1
+        jvm:
+          heap:
+            init_bytes: 34359738368  # 32 GiB
+            max_bytes: 34359738368   # 32 GiB
+        os:
+          total_physical_memory_bytes: 137438953472  # 128 GiB
+
+  - name: init heap above 50% of physical memory
+    expect: fail
+    data:
+      - name: n1
+        jvm:
+          heap:
+            init_bytes: 30064771072  # 28 GiB
+            max_bytes: 30064771072   # 28 GiB
+        os:
+          total_physical_memory_bytes: 34359738368  # 32 GiB

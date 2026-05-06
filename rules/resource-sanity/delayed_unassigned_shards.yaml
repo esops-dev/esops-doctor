@@ -1,0 +1,25 @@
+checks:
+  - id: delayed_unassigned_shards
+    name: Cluster has delayed unassigned shards
+    category: resource_sanity
+    severity: warn
+    description: >
+      Delayed-unassigned shards are replicas the cluster is intentionally
+      withholding from allocation while it waits for a node to come back
+      (index.unassigned.node_left.delayed_timeout). A persistent count
+      here means the timeout is overdue and a node has not returned —
+      the cluster is one node failure away from data loss on those
+      shards' indices.
+    probe: cluster_health
+    condition: |
+      !has(self.delayed_unassigned_shards) || int(self.delayed_unassigned_shards) == 0
+    count_expression: |
+      has(self.delayed_unassigned_shards) ? int(self.delayed_unassigned_shards) : 0
+    message: '{{count}} shard(s) flagged as delayed-unassigned by /_cluster/health.'
+    remediation:
+      command: Bring the missing node back online or rejoin replacement capacity to the cluster so the delayed allocation can resume
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/delayed-allocation.html
+    tags: [prod, availability]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: low

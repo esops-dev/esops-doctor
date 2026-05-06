@@ -1,0 +1,24 @@
+checks:
+  - id: ism_policy_present
+    name: At least one ISM policy is defined
+    category: lifecycle
+    severity: warn
+    description: >
+      Time-series workloads on OpenSearch belong on an Index State
+      Management policy so retention transitions are automated rather
+      than driven by ad-hoc index deletion. A cluster with zero ISM
+      policies is either pre-prod or has retention gaps; surface the
+      absence so the operator can decide.
+    probe: ism_state
+    condition: |
+      size(self) > 0
+    count_expression: |
+      size(self)
+    message: No ISM policies are defined; time-series indices have no automated retention.
+    remediation:
+      command: Define an ISM policy that rolls over and deletes time-series indices on a schedule
+      doc_url: https://opensearch.org/docs/latest/im-plugin/ism/index/
+    tags: [prod, retention]
+    dialects: [opensearch]
+    affected_versions: ["1.x", "2.x", "3.x"]
+    effort: medium

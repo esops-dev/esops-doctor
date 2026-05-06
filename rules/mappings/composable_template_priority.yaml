@@ -1,0 +1,29 @@
+checks:
+  - id: composable_template_priority
+    name: Composable index template missing priority
+    category: mappings
+    severity: warn
+    description: >
+      Composable (v2) index templates without an explicit priority
+      default to zero. When two templates' index_patterns overlap the
+      cluster picks the higher-priority template — falling back on
+      ordering implicit at zero is fragile, and silent surprises here
+      land as broken mappings on freshly-created indices.
+    probe: index_templates
+    condition: |
+      size(self) == 0 ||
+      self.all(t,
+        has(t.priority) && int(t.priority) > 0
+      )
+    count_expression: |
+      size(self.filter(t,
+        !has(t.priority) || int(t.priority) == 0
+      ))
+    message: '{{count}} composable template(s) without an explicit priority.'
+    remediation:
+      command: Set a non-zero priority on the affected templates so overlapping patterns resolve deterministically
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/index-templates.html
+    tags: [hygiene, mappings]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: low

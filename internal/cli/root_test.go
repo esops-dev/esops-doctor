@@ -348,7 +348,7 @@ func TestValidatorsAcceptValid(t *testing.T) {
 }
 
 // TestPlannedOutputFormatsIsEmptyOnceAllWired guards the contract that
-// every format CLAUDE.md §10 names is now implemented. If a future
+// every documented output format is now implemented. If a future
 // change re-introduces a planned-but-unwired format (e.g. for a v2
 // schema), this test is the prompt to also re-introduce a
 // rejects-planned-formats test alongside it.

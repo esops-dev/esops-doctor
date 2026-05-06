@@ -1,0 +1,22 @@
+rule: snapshot_repository_configured
+cases:
+  - name: one s3 repo passes
+    expect: pass
+    data:
+      - name: snapshots-prod
+        type: s3
+        settings:
+          bucket: my-prod-snapshots
+          base_path: cluster1
+
+  - name: shared fs repo passes
+    expect: pass
+    data:
+      - name: nfs
+        type: fs
+        settings:
+          location: /mnt/snapshots
+
+  - name: no repository fails
+    expect: fail
+    data: []

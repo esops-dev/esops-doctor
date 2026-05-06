@@ -166,6 +166,36 @@ func (f *fakeISM) ExplainPolicyStream(context.Context, types.ISMExplainRequest, 
 	return f.Err
 }
 
+type fakeNodeBootstrapInspector struct{ Result []types.NodeBootstrap }
+
+func (f *fakeNodeBootstrapInspector) NodeBootstrap(context.Context) ([]types.NodeBootstrap, error) {
+	return f.Result, nil
+}
+
+type fakeClusterSettingsFullInspector struct{ Result types.ClusterSettingsFull }
+
+func (f *fakeClusterSettingsFullInspector) GetClusterSettingsFull(context.Context, bool) (types.ClusterSettingsFull, error) {
+	return f.Result, nil
+}
+
+type fakeAllocationInspector struct{ Result []types.NodeAllocation }
+
+func (f *fakeAllocationInspector) AllocationByNode(context.Context) ([]types.NodeAllocation, error) {
+	return f.Result, nil
+}
+
+type fakeTransportTLSInspector struct{ Result types.TransportTLS }
+
+func (f *fakeTransportTLSInspector) TransportTLS(context.Context) (types.TransportTLS, error) {
+	return f.Result, nil
+}
+
+type fakeMappingsInspector struct{ Result []types.IndexMapping }
+
+func (f *fakeMappingsInspector) GetMappings(context.Context, types.MappingFilter) ([]types.IndexMapping, error) {
+	return f.Result, nil
+}
+
 // fullClient assembles a *client.Client with every read-side capability
 // the registry dispatches to, populated with the given fakes. Tests
 // that exercise just one probe pass nils for the rest; tests that
@@ -187,6 +217,11 @@ func fullClient() *client.Client {
 		ClusterSettingsRead: &fakeClusterSettingsInspector{},
 		PendingTasks:        &fakePendingTasksInspector{},
 		Deprecations:        &fakeDeprecationInspector{},
+		NodeBootstrap:       &fakeNodeBootstrapInspector{},
+		ClusterSettingsAll:  &fakeClusterSettingsFullInspector{},
+		Allocation:          &fakeAllocationInspector{},
+		TransportTLS:        &fakeTransportTLSInspector{},
+		Mappings:            &fakeMappingsInspector{},
 	}
 }
 

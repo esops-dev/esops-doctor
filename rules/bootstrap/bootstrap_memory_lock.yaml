@@ -1,0 +1,29 @@
+checks:
+  - id: bootstrap_memory_lock
+    name: bootstrap.memory_lock not enabled
+    category: bootstrap
+    severity: error
+    description: >
+      Without bootstrap.memory_lock the JVM heap can be paged out to
+      disk under memory pressure — page-in latency on a hot node turns
+      into a multi-second GC stall. The official guidance is to either
+      mlockall the JVM or disable swap entirely. Flag any node the
+      cluster reports as not memory-locked.
+    probe: node_bootstrap
+    condition: |
+      size(self) == 0 ||
+      self.all(n,
+        !has(n.mlockall_enabled) || n.mlockall_enabled == true
+      )
+    count_expression: |
+      size(self.filter(n,
+        has(n.mlockall_enabled) && n.mlockall_enabled == false
+      ))
+    message: '{{count}} node(s) not running with bootstrap.memory_lock enabled.'
+    remediation:
+      command: Set bootstrap.memory_lock=true in elasticsearch.yml/opensearch.yml and ensure the service unit raises LimitMEMLOCK=infinity
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-configuration-memory.html
+    tags: [prod, performance, bootstrap]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: low

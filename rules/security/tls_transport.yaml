@@ -1,0 +1,25 @@
+checks:
+  - id: tls_transport
+    name: TLS not configured for cluster connection
+    category: security
+    severity: critical
+    description: >
+      The configured context connects to the cluster over plain HTTP.
+      Credentials, document content, and admin commands all travel in
+      cleartext. The check reads the local TLS posture (scheme + auth
+      knobs) — the cluster cannot tell us whether `insecure: true` was
+      set client-side, so this is reported from the operator's own
+      configuration.
+    probe: security_audit
+    condition: |
+      has(self.tls) && has(self.tls.scheme) && self.tls.scheme == 'https'
+    count_expression: |
+      (has(self.tls) && has(self.tls.scheme) && self.tls.scheme == 'https') ? 0 : 1
+    message: Cluster context is not using HTTPS.
+    remediation:
+      command: Update the cluster's HTTP layer to use TLS (xpack.security.http.ssl on ES, plugins.security.ssl.http on OS) and switch the context URL to https://
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/security-basic-setup-https.html
+    tags: [prod, security, tls]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

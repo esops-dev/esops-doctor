@@ -1,0 +1,43 @@
+rule: shard_count_per_node
+cases:
+  - name: empty fleet passes
+    expect: pass
+    data: []
+
+  - name: every node well under the ceiling
+    expect: pass
+    data:
+      - name: n1
+        shards: 120
+      - name: n2
+        shards: 95
+      - name: UNASSIGNED
+        shards: 0
+
+  - name: at the 600 boundary passes
+    expect: pass
+    data:
+      - name: n1
+        shards: 600
+
+  - name: many UNASSIGNED rows ignored
+    expect: pass
+    data:
+      - name: UNASSIGNED
+        shards: 9000
+      - name: n1
+        shards: 50
+
+  - name: one node above 600 flags
+    expect: fail
+    data:
+      - name: n1
+        shards: 100
+      - name: n2
+        shards: 720
+
+  - name: node deep in the danger zone flags
+    expect: fail
+    data:
+      - name: hot1
+        shards: 2400

@@ -1,0 +1,29 @@
+checks:
+  - id: template_no_index_patterns
+    name: Composable template with empty index_patterns
+    category: mappings
+    severity: error
+    description: >
+      A composable template with no index_patterns matches nothing —
+      the cluster accepted it but no future index will pick up its
+      settings, mappings, or aliases. Almost always a copy-paste
+      mistake; surface it so the operator can either fix the patterns
+      or remove the dead template.
+    probe: index_templates
+    condition: |
+      size(self) == 0 ||
+      self.all(t,
+        has(t.index_patterns) && size(t.index_patterns) > 0
+      )
+    count_expression: |
+      size(self.filter(t,
+        !has(t.index_patterns) || size(t.index_patterns) == 0
+      ))
+    message: '{{count}} composable template(s) with no index_patterns set.'
+    remediation:
+      command: Add at least one index pattern to the template (or delete the template if it is unused)
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/index-templates.html
+    tags: [hygiene, mappings]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: low

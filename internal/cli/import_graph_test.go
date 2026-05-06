@@ -21,9 +21,10 @@ import (
 // once anything in doctor imports esops-go/pkg/cluster, which legitimately
 // composes the upstream client adapters and brings the elastic /
 // opensearch / aws / otel transports along as `// indirect` go.sum
-// entries (see CLAUDE.md §4 on OTEL appearing indirect). Direct imports
-// are what we ban; transitive presence under the upstream's hood is
-// what `pkg/cluster` exists to encapsulate.
+// entries. (OTEL specifically: doctor itself never imports any OTEL
+// package; it only appears indirect via the upstream client transport.)
+// Direct imports are what we ban; transitive presence under the
+// upstream's hood is what `pkg/cluster` exists to encapsulate.
 func TestNoForbiddenClusterClientImports(t *testing.T) {
 	forbidden := []string{
 		"github.com/elastic/go-elasticsearch",
@@ -48,11 +49,10 @@ func TestNoForbiddenClusterClientImports(t *testing.T) {
 }
 
 // TestPkgClientOnlyInProbes asserts that esops-go/pkg/client is imported
-// only from internal/probes/. CLAUDE.md §5 makes the probe layer the
-// single greppable cluster-touch boundary; this test fails as soon as
-// another package introduces a pkg/client import. pkg/cluster construction
-// also lives in internal/probes/ (probes.Connect) so the same constraint
-// covers it.
+// only from internal/probes/. The probe layer is the single greppable
+// cluster-touch boundary; this test fails as soon as another package
+// introduces a pkg/client import. pkg/cluster construction also lives
+// in internal/probes/ (probes.Connect) so the same constraint covers it.
 func TestPkgClientOnlyInProbes(t *testing.T) {
 	allowed := map[string]struct{}{
 		"internal/probes": {},
@@ -160,11 +160,13 @@ var forbiddenCapabilityRefs = map[string]string{
 	"Reindexer":                 "mutating capability",
 	"IndexStateChanger":         "mutating capability",
 	"IndexOptimizer":            "mutating capability",
+	"IndexRollover":             "mutating capability",
 	"IndexShrinker":             "mutating capability",
 	"IndexSettingsUpdater":      "mutating capability",
 	"IndexTemplateUpdater":      "mutating capability",
 	"AliasUpdater":              "mutating capability",
 	"SnapshotCreator":           "mutating capability",
+	"SnapshotVerifier":          "mutating capability (writes temp blobs to repo)",
 	"SnapshotRestorer":          "mutating capability",
 	"SnapshotPruner":            "mutating capability",
 	"SnapshotRepositoryManager": "mutating capability",

@@ -1,0 +1,28 @@
+rule: script_limits
+cases:
+  - name: persistent allowed_types set passes
+    expect: pass
+    data:
+      persistent:
+        "script.allowed_types": "stored"
+      transient: {}
+
+  - name: transient allowed_types set passes
+    expect: pass
+    data:
+      persistent: {}
+      transient:
+        "script.allowed_types": "none"
+
+  - name: not set anywhere flags
+    expect: fail
+    data:
+      persistent: {}
+      transient: {}
+
+  - name: unrelated keys present, script policy still default
+    expect: fail
+    data:
+      persistent:
+        "cluster.routing.allocation.disk.threshold_enabled": "true"
+      transient: {}
