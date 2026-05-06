@@ -19,7 +19,7 @@ type Finding struct {
 	// active (non-expired) waiver tells the report layer to skip this
 	// finding when computing the --fail-on threshold; an expired one
 	// keeps the failure live and surfaces "waiver expired" so the
-	// suppression cannot rot silently (CLAUDE.md §9).
+	// suppression cannot rot silently.
 	Suppression *Suppression
 }
 

@@ -19,14 +19,18 @@ import (
 // caught at lint time rather than evaluation time.
 const (
 	Aliases              = "aliases"
+	Allocation           = "allocation"
 	ClusterHealth        = "cluster_health"
 	ClusterSettings      = "cluster_settings"
+	ClusterSettingsFull  = "cluster_settings_full"
 	DeprecationLog       = "deprecation_log"
 	ILMState             = "ilm_state"
 	ISMState             = "ism_state"
 	Indices              = "indices"
 	IndexSettings        = "index_settings"
 	IndexTemplates       = "index_templates"
+	Mappings             = "mappings"
+	NodeBootstrap        = "node_bootstrap"
 	NodeStats            = "node_stats"
 	Nodes                = "nodes"
 	PendingTasks         = "pending_tasks"
@@ -34,20 +38,25 @@ const (
 	SecurityAudit        = "security_audit"
 	SnapshotRepositories = "snapshot_repositories"
 	Snapshots            = "snapshots"
+	TransportTLS         = "transport_tls"
 )
 
 // known is the registered probe-name set. Adding a probe means adding
 // a constant above, an entry here, and a dispatch arm in Registry.Probe.
 var known = map[string]struct{}{
 	Aliases:              {},
+	Allocation:           {},
 	ClusterHealth:        {},
 	ClusterSettings:      {},
+	ClusterSettingsFull:  {},
 	DeprecationLog:       {},
 	ILMState:             {},
 	ISMState:             {},
 	Indices:              {},
 	IndexSettings:        {},
 	IndexTemplates:       {},
+	Mappings:             {},
+	NodeBootstrap:        {},
 	NodeStats:            {},
 	Nodes:                {},
 	PendingTasks:         {},
@@ -55,6 +64,7 @@ var known = map[string]struct{}{
 	SecurityAudit:        {},
 	SnapshotRepositories: {},
 	Snapshots:            {},
+	TransportTLS:         {},
 }
 
 // Known returns the registered probe names in deterministic order.
@@ -81,13 +91,13 @@ func IsKnown(name string) bool {
 type Connector func(ctx context.Context, cc config.Context) (*client.Client, error)
 
 // Connect resolves cc to a connected esops client by delegating to
-// pkg/cluster.New. Lives in this package because probes is the single
-// permitted importer of pkg/client (CLAUDE.md §5).
+// pkg/cluster.New. Lives in this package because probes is the only
+// package permitted to import pkg/client.
 //
 // Upstream sentinel errors (client.ErrUnreachable / ErrAuth /
 // ErrForbidden / ErrUnknownProduct) are translated to the corresponding
-// exit-package sentinels so the binary's exit code follows CLAUDE.md
-// §10 without the exit package needing to import pkg/client.
+// exit-package sentinels so the binary's exit code stays correct
+// without the exit package needing to import pkg/client.
 func Connect(ctx context.Context, cc config.Context) (*client.Client, error) {
 	cl, err := cluster.New(ctx, cc)
 	if err != nil {
@@ -238,6 +248,31 @@ func (r *Registry) dispatch(ctx context.Context, name string) (any, error) {
 			return nil, notConfigured(name)
 		}
 		return fetchDeprecations(ctx, cl.Deprecations)
+	case NodeBootstrap:
+		if cl.NodeBootstrap == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchNodeBootstrap(ctx, cl.NodeBootstrap)
+	case ClusterSettingsFull:
+		if cl.ClusterSettingsAll == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchClusterSettingsFull(ctx, cl.ClusterSettingsAll)
+	case Allocation:
+		if cl.Allocation == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchAllocation(ctx, cl.Allocation)
+	case TransportTLS:
+		if cl.TransportTLS == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchTransportTLS(ctx, cl.TransportTLS)
+	case Mappings:
+		if cl.Mappings == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchMappings(ctx, cl.Mappings)
 	default:
 		return nil, fmt.Errorf("%w: %s", engine.ErrProbeNotFound, name)
 	}

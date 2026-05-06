@@ -1,0 +1,25 @@
+rule: template_no_index_patterns
+cases:
+  - name: empty template list passes
+    expect: pass
+    data: []
+
+  - name: every template has patterns
+    expect: pass
+    data:
+      - name: logs
+        index_patterns: ["logs-*"]
+        priority: 200
+
+  - name: missing patterns field flags
+    expect: fail
+    data:
+      - name: orphan
+        priority: 50
+
+  - name: empty patterns array flags
+    expect: fail
+    data:
+      - name: orphan
+        index_patterns: []
+        priority: 50

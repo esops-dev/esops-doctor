@@ -1,0 +1,28 @@
+rule: zone_awareness
+cases:
+  - name: persistent setting present passes
+    expect: pass
+    data:
+      persistent:
+        "cluster.routing.allocation.awareness.attributes": "zone"
+      transient: {}
+
+  - name: transient setting present passes
+    expect: pass
+    data:
+      persistent: {}
+      transient:
+        "cluster.routing.allocation.awareness.attributes": "rack_id"
+
+  - name: empty settings flag
+    expect: fail
+    data:
+      persistent: {}
+      transient: {}
+
+  - name: settings populated but awareness not set
+    expect: fail
+    data:
+      persistent:
+        "cluster.routing.allocation.disk.threshold_enabled": "true"
+      transient: {}

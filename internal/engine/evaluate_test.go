@@ -206,68 +206,6 @@ func TestEvaluateMessageCountTemplatingNonList(t *testing.T) {
 	}
 }
 
-// TestEvaluateHeapSizeAgainstEmbedded is the load-bearing end-to-end
-// test: the shipped heap_size rule, compiled via the engine, evaluated
-// against a fixture shaped like the node_stats probe's JSON output
-// (snake_case keys mirroring esops-go/pkg/types.NodeStats json tags).
-// Covers the three branches of the rule's CEL: under-limit + sized
-// for RAM (pass), over the 31 GiB cap (fail), oversized init heap
-// vs. physical memory (fail), no JVM info reported (skip via !has()).
-func TestEvaluateHeapSizeAgainstEmbedded(t *testing.T) {
-	cat, err := rules.LoadEmbedded()
-	if err != nil {
-		t.Fatalf("LoadEmbedded: %v", err)
-	}
-	eng, err := Compile(cat)
-	if err != nil {
-		t.Fatalf("Compile: %v", err)
-	}
-
-	const gb = float64(1024 * 1024 * 1024)
-	heapNode := func(initGiB, maxGiB, ramGiB float64) map[string]any {
-		return map[string]any{
-			"name": "n1",
-			"jvm": map[string]any{
-				"heap": map[string]any{
-					"init_bytes": initGiB * gb,
-					"max_bytes":  maxGiB * gb,
-				},
-			},
-			"os": map[string]any{
-				"total_physical_memory_bytes": ramGiB * gb,
-			},
-		}
-	}
-
-	cases := []struct {
-		name string
-		data []any
-		want RuleStatus
-	}{
-		{"8 GiB heap on 32 GiB host", []any{heapNode(8, 8, 32)}, RuleStatusPass},
-		{"32 GiB heap exceeds 31 GiB cap", []any{heapNode(32, 32, 128)}, RuleStatusFail},
-		{"init heap > 50% of RAM", []any{heapNode(28, 28, 32)}, RuleStatusFail},
-		{"coordinating-only node skipped", []any{map[string]any{"name": "coord-1"}}, RuleStatusPass},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			results := eng.Evaluate(context.Background(), MapRegistry{"node_stats": c.data}, "elasticsearch")
-			if got := findStatus(results, "heap_size"); got != c.want {
-				t.Errorf("heap_size status = %v, want %v; results=%+v", got, c.want, results)
-			}
-		})
-	}
-}
-
-func findStatus(results []RuleResult, ruleID string) RuleStatus {
-	for _, r := range results {
-		if r.RuleID == ruleID {
-			return r.Status
-		}
-	}
-	return RuleStatus(-1)
-}
-
 // TestCountExpressionFeedsMessage locks the count_expression contract:
 // when present, the rule's message {{count}} is the result of the
 // expression, not len(self). Without this the heap_size message would

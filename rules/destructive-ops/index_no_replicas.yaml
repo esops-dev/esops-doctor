@@ -1,0 +1,39 @@
+checks:
+  - id: index_no_replicas
+    name: User index running with zero replicas
+    category: destructive_ops
+    severity: warn
+    description: >
+      An index with index.number_of_replicas = 0 has no redundancy —
+      a single shard loss equals data loss. Common in dev/CI but a
+      foot-gun in production. System indices (dot-prefixed) are
+      excluded since their replica policy is the cluster's call;
+      data-stream backing indices are excluded too.
+    probe: index_settings
+    condition: |
+      size(self) == 0 ||
+      self.all(idx,
+        !has(idx.index) ||
+        idx.index.startsWith('.') ||
+        !has(idx.settings) ||
+        !has(idx.settings.index) ||
+        !has(idx.settings.index.number_of_replicas) ||
+        int(idx.settings.index.number_of_replicas) > 0
+      )
+    count_expression: |
+      size(self.filter(idx,
+        has(idx.index) &&
+        !idx.index.startsWith('.') &&
+        has(idx.settings) &&
+        has(idx.settings.index) &&
+        has(idx.settings.index.number_of_replicas) &&
+        int(idx.settings.index.number_of_replicas) == 0
+      ))
+    message: '{{count}} non-system index/indices with zero replicas configured.'
+    remediation:
+      command: Set index.number_of_replicas to at least 1 on the affected indices, or apply a template that does so for future indices
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/index-modules.html#dynamic-index-settings
+    tags: [prod, availability]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: low

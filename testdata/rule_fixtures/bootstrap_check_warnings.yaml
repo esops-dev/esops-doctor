@@ -1,0 +1,30 @@
+rule: bootstrap_check_warnings
+cases:
+  - name: empty node list passes
+    expect: pass
+    data: []
+
+  - name: no warnings reported
+    expect: pass
+    data:
+      - name: n1
+        bootstrap_warnings: []
+      - name: n2
+
+  - name: one node with warnings flags
+    expect: fail
+    data:
+      - name: n1
+        bootstrap_warnings:
+          - "max virtual memory areas vm.max_map_count [65530] is too low, increase to at least [262144]"
+
+  - name: multiple warnings on multiple nodes flag
+    expect: fail
+    data:
+      - name: n1
+        bootstrap_warnings:
+          - "max file descriptors [10240] for elasticsearch process is too low, increase to at least [65535]"
+          - "system call filters failed to install"
+      - name: n2
+        bootstrap_warnings:
+          - "max number of threads [3818] for user [elasticsearch] is too low, increase to at least [4096]"

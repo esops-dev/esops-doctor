@@ -1,0 +1,29 @@
+checks:
+  - id: max_file_descriptors_low
+    name: Process file-descriptor limit below recommendation
+    category: bootstrap
+    severity: error
+    description: >
+      Elasticsearch and OpenSearch both recommend a minimum of 65535
+      file descriptors per process. A node with a lower ulimit will
+      hit "Too many open files" failures under shard recovery or
+      heavy indexing. Flag any node where process.max_file_descriptors
+      sits below the documented floor.
+    probe: node_bootstrap
+    condition: |
+      size(self) == 0 ||
+      self.all(n,
+        !has(n.max_file_descriptors) || int(n.max_file_descriptors) >= 65535
+      )
+    count_expression: |
+      size(self.filter(n,
+        has(n.max_file_descriptors) && int(n.max_file_descriptors) < 65535
+      ))
+    message: '{{count}} node(s) with max_file_descriptors below the 65535 minimum.'
+    remediation:
+      command: Raise the process file-descriptor ulimit (LimitNOFILE=65535 in the systemd unit, or /etc/security/limits.conf for non-systemd hosts) and restart the node
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/setting-system-settings.html
+    tags: [prod, bootstrap]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: low

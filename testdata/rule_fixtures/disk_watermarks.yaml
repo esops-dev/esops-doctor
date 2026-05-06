@@ -1,0 +1,34 @@
+rule: disk_watermarks
+cases:
+  - name: all nodes well under low watermark
+    expect: pass
+    data:
+      - name: n1
+        disk_used_percent: 42
+      - name: n2
+        disk_used_percent: 50
+      - name: n3
+        disk_used_percent: 38
+
+  - name: empty cluster (no nodes reported) is skipped
+    expect: pass
+    data: []
+
+  - name: node missing disk metric is treated as ok
+    expect: pass
+    data:
+      - name: n1
+
+  - name: one node at 85% trips the low watermark
+    expect: fail
+    data:
+      - name: n1
+        disk_used_percent: 60
+      - name: n2
+        disk_used_percent: 85
+
+  - name: any node at 90% trips it
+    expect: fail
+    data:
+      - name: n1
+        disk_used_percent: 92

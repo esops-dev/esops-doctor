@@ -334,7 +334,7 @@ func TestScanJUnitOutput(t *testing.T) {
 		t.Errorf("junit output should start with XML header; got %.40q", out)
 	}
 	for _, want := range []string{
-		`<testsuites`, `<testsuite`, `<testcase`, `name="heap_size"`, `tests="1"`,
+		`<testsuites`, `<testsuite`, `<testcase`, `name="heap_size"`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("junit output missing %q\nfull output:\n%s", want, out)
@@ -518,7 +518,7 @@ waivers:
 	}
 }
 
-// TestScanExpiredWaiverFailsLoud — the CLAUDE.md §9 contract:
+// TestScanExpiredWaiverFailsLoud — the waiver contract:
 // expired waivers re-surface the finding, prefixed with the expired
 // note, and the scan still exits 20.
 func TestScanExpiredWaiverFailsLoud(t *testing.T) {
@@ -581,27 +581,27 @@ func TestScanMissingWaiversFileIsUsageError(t *testing.T) {
 
 // TestScanClusterWaiversFlagIsDocumentedButGated reflects the current
 // state: --cluster-waivers is reserved (the user story is on the
-// roadmap) but pkg/client does not yet expose the document-read
-// capability needed to implement it. The flag returns a usage error
-// pointing at the upstream gap rather than silently no-op'ing.
+// roadmap) but the cluster-side waiver wiring is its own milestone.
+// The flag returns a usage error rather than silently no-op'ing so
+// an operator who set --cluster-waivers in CI sees the gate loudly.
 func TestScanClusterWaiversFlagIsDocumentedButGated(t *testing.T) {
 	err := Run(context.Background(), []string{
 		"esops-doctor", "scan", "--cluster-waivers", "--url", "http://example.invalid",
 	})
 	if err == nil {
-		t.Fatal("expected usage error explaining the upstream gap")
+		t.Fatal("expected usage error for the gated flag")
 	}
 	if got := exit.Code(err); got != 2 {
 		t.Errorf("exit code = %d, want 2; err=%v", got, err)
 	}
 	if !strings.Contains(err.Error(), "cluster-waivers") ||
-		!strings.Contains(err.Error(), "pkg/client") {
-		t.Errorf("err should explain the upstream pkg/client gap; got %v", err)
+		!strings.Contains(err.Error(), "not yet implemented") {
+		t.Errorf("err should name the flag and the not-yet-implemented gate; got %v", err)
 	}
 }
 
 func TestScanHelpDescribesExitCodes(t *testing.T) {
-	// --help is the v0.1 documentation surface (CLAUDE.md §13). Confirm
+	// --help is the documentation surface for the first release. Confirm
 	// the scan command surfaces the exit-code semantics there so
 	// operators don't have to read the source to find them.
 	root := newRoot()

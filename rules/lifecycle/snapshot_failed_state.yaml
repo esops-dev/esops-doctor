@@ -1,0 +1,24 @@
+checks:
+  - id: snapshot_failed_state
+    name: Snapshots in FAILED state
+    category: lifecycle
+    severity: error
+    description: >
+      A snapshot whose state is FAILED finished with at least one shard
+      that did not write — the resulting snapshot cannot be relied on
+      for restore. Surface every failure so the operator can prune the
+      stale entry and re-run the SLM/SLS schedule.
+    probe: snapshots
+    condition: |
+      size(self) == 0 ||
+      self.all(s, !has(s.state) || s.state != 'FAILED')
+    count_expression: |
+      size(self.filter(s, has(s.state) && s.state == 'FAILED'))
+    message: '{{count}} snapshot(s) finished with state FAILED.'
+    remediation:
+      command: Investigate the failure (ShardsFailed and Failures), prune the snapshot, and re-run the schedule
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/snapshots-take-snapshot.html
+    tags: [prod, recoverability]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

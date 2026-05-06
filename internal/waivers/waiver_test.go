@@ -137,8 +137,8 @@ waivers:
 }
 
 func TestApplyExpiredFiresLoudWithPrefix(t *testing.T) {
-	// CLAUDE.md §9: expired waivers fail loud — the finding re-surfaces
-	// with a "waiver expired" prefix so they cannot rot silently.
+	// Expired waivers fail loud — the finding re-surfaces with a
+	// "waiver expired" prefix so they cannot rot silently.
 	dir := t.TempDir()
 	p := writeFile(t, dir, "w.yaml", `
 waivers:

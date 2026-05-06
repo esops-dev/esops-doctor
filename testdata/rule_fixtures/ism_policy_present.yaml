@@ -1,0 +1,22 @@
+rule: ism_policy_present
+cases:
+  - name: one policy passes
+    expect: pass
+    dialect: opensearch
+    data:
+      - id: logs-hot-warm-delete
+        seq_no: 5
+        primary_term: 1
+
+  - name: many policies pass
+    expect: pass
+    dialect: opensearch
+    data:
+      - id: logs
+      - id: metrics
+      - id: traces
+
+  - name: zero policies fail
+    expect: fail
+    dialect: opensearch
+    data: []

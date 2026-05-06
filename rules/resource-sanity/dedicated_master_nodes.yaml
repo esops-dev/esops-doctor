@@ -1,0 +1,33 @@
+checks:
+  - id: dedicated_master_nodes
+    name: Dedicated master-eligible nodes
+    category: resource_sanity
+    severity: error
+    description: >
+      Production clusters should run at least three dedicated
+      master-eligible nodes (master role, no data role) so master
+      elections survive a single-node failure without contention from
+      data-path workload. Skipped on single-node and two-node clusters
+      where the dedicated-master pattern doesn't apply.
+    probe: nodes
+    condition: |
+      size(self) < 3 ||
+      size(self.filter(n,
+        has(n.roles) &&
+        n.roles.exists(r, r == 'master') &&
+        !n.roles.exists(r, r == 'data' || r.startsWith('data_'))
+      )) >= 3
+    count_expression: |
+      size(self.filter(n,
+        has(n.roles) &&
+        n.roles.exists(r, r == 'master') &&
+        !n.roles.exists(r, r == 'data' || r.startsWith('data_'))
+      ))
+    message: Found {{count}} dedicated master-eligible nodes; want at least 3.
+    remediation:
+      command: Add three master-only nodes (node.roles=[master]) and remove the data role from the existing master-eligible nodes
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-node.html
+    tags: [prod, availability]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

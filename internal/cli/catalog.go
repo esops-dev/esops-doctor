@@ -15,8 +15,8 @@ import (
 // loadLayeredCatalog returns the rule catalog every operator-facing
 // command runs against: the embedded core, layered with --rules-dir
 // (when set) and the user rules.d directory (when present), then
-// validated as a whole. The order matches CLAUDE.md §7's documented
-// loading order: embedded → --rules-dir → user dir.
+// validated as a whole. Loading order is embedded → --rules-dir →
+// user dir.
 //
 // Layering is implemented as catalog Append; the validator catches
 // duplicate IDs as a hard error so an operator who tried to "override"
@@ -25,7 +25,7 @@ import (
 // milestone only requires honouring the directories.
 //
 // Errors are wrapped with exit.Catalog so the binary maps to exit 21,
-// the documented "rule catalog error" code per CLAUDE.md §10.
+// the documented "rule catalog error" code.
 func loadLayeredCatalog(rulesDir string) (*rules.Catalog, error) {
 	cat, err := assembleLayeredCatalog(rulesDir)
 	if err != nil {
@@ -95,7 +95,7 @@ func loadUserRulesDir(path string) (*rules.Catalog, error) {
 	return extra, nil
 }
 
-// userRulesDir resolves the user-overrides directory per CLAUDE.md §7:
+// userRulesDir resolves the user-overrides directory:
 // `$XDG_CONFIG_HOME/esops-doctor/rules.d/` when XDG is set, otherwise
 // `$HOME/.config/esops-doctor/rules.d/`. Returns ok=false only when no
 // home can be discovered — extremely rare on a real system, but the

@@ -1,0 +1,39 @@
+rule: api_keys_no_expiration
+cases:
+  - name: no api_keys block passes
+    expect: pass
+    data:
+      status: { dialect: elasticsearch, enabled: true }
+
+  - name: every key has expiration
+    expect: pass
+    data:
+      status: { dialect: elasticsearch, enabled: true }
+      api_keys:
+        - id: AAA
+          name: ci
+          expiration: "2025-12-31T23:59:59Z"
+        - id: BBB
+          name: report-runner
+          expiration: "2025-06-30T00:00:00Z"
+
+  - name: invalidated key without expiry is fine
+    expect: pass
+    data:
+      status: { dialect: elasticsearch, enabled: true }
+      api_keys:
+        - id: OLD
+          name: legacy
+          invalidated: true
+
+  - name: active key without expiration flags
+    expect: fail
+    data:
+      status: { dialect: elasticsearch, enabled: true }
+      api_keys:
+        - id: AAA
+          name: ci
+          expiration: "2025-12-31T23:59:59Z"
+        - id: ETERNAL
+          name: ad-hoc
+          invalidated: false

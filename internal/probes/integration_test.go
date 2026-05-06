@@ -36,10 +36,9 @@ import (
 	"github.com/esops-dev/esops-doctor/internal/engine"
 )
 
-// Pinned versions for the fast-path matrix per CLAUDE.md §11. Override
-// via env (ESOPS_DOCTOR_TEST_ES_IMAGE / ESOPS_DOCTOR_TEST_OS_IMAGE) to
-// extend to ES 7.17 / 8.x / OS 1.3 / 2.x in nightly runs without
-// touching the test source.
+// Pinned images for the fast-path integration matrix. Override via env
+// (ESOPS_DOCTOR_TEST_ES_IMAGE / ESOPS_DOCTOR_TEST_OS_IMAGE) to extend
+// the matrix in nightly runs without touching the test source.
 const (
 	defaultESImage = "docker.elastic.co/elasticsearch/elasticsearch:9.0.0"
 	defaultOSImage = "opensearchproject/opensearch:2.18.0"

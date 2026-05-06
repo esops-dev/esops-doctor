@@ -1,0 +1,29 @@
+rule: cluster_health_status
+cases:
+  - name: green status passes
+    expect: pass
+    data:
+      cluster_name: prod
+      status: green
+      number_of_nodes: 5
+
+  - name: yellow status fails
+    expect: fail
+    data:
+      cluster_name: prod
+      status: yellow
+      number_of_nodes: 5
+      unassigned_shards: 2
+
+  - name: red status fails
+    expect: fail
+    data:
+      cluster_name: prod
+      status: red
+      number_of_nodes: 5
+      unassigned_shards: 8
+
+  - name: missing status fails
+    expect: fail
+    data:
+      cluster_name: prod

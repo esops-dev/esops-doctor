@@ -1,0 +1,29 @@
+checks:
+  - id: disk_watermarks
+    name: Disk usage approaching low watermark
+    category: resource_sanity
+    severity: error
+    description: >
+      Once a node passes 85% disk usage the cluster's low watermark
+      stops new shard allocations to it; at 90% the high watermark
+      starts relocating shards off; at 95% indices flip to read-only.
+      Flag any data node already at or above 85% so an operator can
+      add capacity before allocation stalls.
+    probe: nodes
+    condition: |
+      size(self) == 0 ||
+      self.all(n,
+        !has(n.disk_used_percent) || int(n.disk_used_percent) < 85
+      )
+    count_expression: |
+      size(self.filter(n,
+        has(n.disk_used_percent) && int(n.disk_used_percent) >= 85
+      ))
+    message: '{{count}} node(s) at or above 85% disk usage (low watermark).'
+    remediation:
+      command: Free disk on the affected node, expand the underlying volume, or relocate shards via cluster.routing.allocation.exclude._name
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-cluster.html#disk-based-shard-allocation
+    tags: [prod, capacity]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

@@ -1,0 +1,58 @@
+rule: dynamic_mapping_strict
+cases:
+  - name: empty mapping list passes
+    expect: pass
+    data: []
+
+  - name: dynamic strict passes
+    expect: pass
+    data:
+      - name: logs-2024-09
+        dynamic: "strict"
+        properties:
+          message:
+            type: text
+
+  - name: dynamic false passes
+    expect: pass
+    data:
+      - name: logs-2024-09
+        dynamic: "false"
+        properties:
+          message:
+            type: text
+
+  - name: system index ignored even with dynamic on
+    expect: pass
+    data:
+      - name: .ds-fleet-actions-results-2024.09-000001
+        dynamic: "true"
+        properties:
+          message:
+            type: text
+
+  - name: dynamic field missing (cluster default = true) flags
+    expect: fail
+    data:
+      - name: events-2024
+        properties:
+          message:
+            type: text
+
+  - name: dynamic explicit "true" flags
+    expect: fail
+    data:
+      - name: events-2024
+        dynamic: "true"
+        properties:
+          message:
+            type: text
+
+  - name: dynamic runtime mode still permissive — flags
+    expect: fail
+    data:
+      - name: events-2024
+        dynamic: "runtime"
+        properties:
+          message:
+            type: text

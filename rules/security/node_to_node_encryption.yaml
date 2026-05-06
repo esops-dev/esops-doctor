@@ -1,0 +1,27 @@
+checks:
+  - id: node_to_node_encryption
+    name: Node-to-node transport TLS not enabled
+    category: security
+    severity: critical
+    description: >
+      The cluster's transport channel (port 9300 by default) carries
+      indexing traffic, master-state updates, and inter-node
+      authentication. Without TLS on that channel an attacker on the
+      same network reads documents in flight and can impersonate a
+      cluster member. Distinct from the HTTP-side TLS surfaced by the
+      tls_transport rule — both have to be on. The cluster reports
+      transport_tls_enabled=true only when every reachable node has
+      transport TLS configured.
+    probe: transport_tls
+    condition: |
+      has(self.transport_tls_enabled) && self.transport_tls_enabled == true
+    count_expression: |
+      (has(self.transport_tls_enabled) && self.transport_tls_enabled == true) ? 0 : 1
+    message: Transport-layer TLS is not enabled cluster-wide.
+    remediation:
+      command: Configure xpack.security.transport.ssl on Elasticsearch (or plugins.security.ssl.transport on OpenSearch) on every node and roll the cluster
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/security-basic-setup.html
+    tags: [prod, security, tls]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: high

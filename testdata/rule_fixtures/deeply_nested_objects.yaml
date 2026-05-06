@@ -1,0 +1,101 @@
+rule: deeply_nested_objects
+cases:
+  - name: empty mapping list passes
+    expect: pass
+    data: []
+
+  - name: flat mapping passes
+    expect: pass
+    data:
+      - name: logs
+        properties:
+          message:
+            type: text
+          level:
+            type: keyword
+
+  - name: 2 levels of nesting passes (depth 2 — root + child object)
+    expect: pass
+    data:
+      - name: events
+        properties:
+          user:
+            properties:
+              name:
+                type: keyword
+
+  - name: 3 levels of nesting still passes
+    expect: pass
+    data:
+      - name: events
+        properties:
+          user:
+            properties:
+              address:
+                properties:
+                  city:
+                    type: keyword
+
+  - name: 4 levels of nesting passes (boundary — depth equals threshold)
+    expect: pass
+    data:
+      - name: events
+        properties:
+          a:
+            properties:
+              b:
+                properties:
+                  c:
+                    properties:
+                      leaf:
+                        type: keyword
+
+  - name: system index ignored even with deep nesting
+    expect: pass
+    data:
+      - name: .internal-deep
+        properties:
+          a:
+            properties:
+              b:
+                properties:
+                  c:
+                    properties:
+                      d:
+                        properties:
+                          e:
+                            type: keyword
+
+  - name: 5 levels of nesting flags
+    expect: fail
+    data:
+      - name: events
+        properties:
+          a:
+            properties:
+              b:
+                properties:
+                  c:
+                    properties:
+                      d:
+                        properties:
+                          e:
+                            type: keyword
+
+  - name: deeply nested at one branch among many
+    expect: fail
+    data:
+      - name: events
+        properties:
+          shallow:
+            type: keyword
+          deep:
+            properties:
+              x:
+                properties:
+                  y:
+                    properties:
+                      z:
+                        properties:
+                          finally:
+                            type: keyword

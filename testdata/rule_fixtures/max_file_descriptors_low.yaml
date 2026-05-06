@@ -1,0 +1,36 @@
+rule: max_file_descriptors_low
+cases:
+  - name: empty node list passes
+    expect: pass
+    data: []
+
+  - name: at recommended floor passes
+    expect: pass
+    data:
+      - name: n1
+        max_file_descriptors: 65535
+
+  - name: well above floor passes
+    expect: pass
+    data:
+      - name: n1
+        max_file_descriptors: 1048576
+
+  - name: cluster did not report metric (skipped)
+    expect: pass
+    data:
+      - name: n1
+
+  - name: 1024 ulimit flags
+    expect: fail
+    data:
+      - name: n1
+        max_file_descriptors: 1024
+
+  - name: mixed cluster — one node low — flags
+    expect: fail
+    data:
+      - name: n1
+        max_file_descriptors: 65535
+      - name: n2
+        max_file_descriptors: 4096

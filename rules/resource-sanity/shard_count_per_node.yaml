@@ -1,0 +1,33 @@
+checks:
+  - id: shard_count_per_node
+    name: Per-node shard count above recommendation
+    category: resource_sanity
+    severity: warn
+    description: >
+      Each shard carries fixed metadata, segment-cache, and FD overhead
+      on its hosting node. Once a node passes ~600 shards the master's
+      cluster-state messages, recovery times, and search-thread-pool
+      pressure all degrade. Flag any node above the documented ~600
+      ceiling. The "UNASSIGNED" pseudo-row /_cat/allocation reports
+      is excluded — it counts shards waiting for placement, not shards
+      pinned to a real node.
+    probe: allocation
+    condition: |
+      size(self) == 0 ||
+      self.all(n,
+        !has(n.name) || n.name == 'UNASSIGNED' ||
+        !has(n.shards) || int(n.shards) <= 600
+      )
+    count_expression: |
+      size(self.filter(n,
+        has(n.name) && n.name != 'UNASSIGNED' &&
+        has(n.shards) && int(n.shards) > 600
+      ))
+    message: '{{count}} node(s) hosting more than 600 shards.'
+    remediation:
+      command: Reduce shard count via rollover/shrink, increase node count, or raise cluster.max_shards_per_node only after addressing the underlying sharding strategy
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/size-your-shards.html
+    tags: [prod, performance]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: high

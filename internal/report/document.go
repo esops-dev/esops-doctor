@@ -8,8 +8,8 @@ import (
 )
 
 // SchemaVersion is the wire-format version of the structured report
-// emitted by the json and yaml renderers (CLAUDE.md §10). Bumped only
-// for downstream-breaking changes; additive fields don't bump it. A
+// emitted by the json and yaml renderers. Bumped only for
+// downstream-breaking changes; additive fields don't bump it. A
 // downstream that pins to schema_version=1 should keep working until
 // the next bump.
 const SchemaVersion = 1
@@ -74,7 +74,7 @@ type Scan struct {
 // the same numbers appear regardless of format. Waived counts the
 // active-waiver findings excluded from BySeverity / Failed; expired
 // waivers fall back into Failed and BySeverity because the suppression
-// failed and the finding fires loud (CLAUDE.md §9).
+// failed and the finding fires loud.
 type Summary struct {
 	Passed     int            `json:"passed" yaml:"passed"`
 	Failed     int            `json:"failed" yaml:"failed"`

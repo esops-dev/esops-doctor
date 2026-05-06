@@ -65,8 +65,8 @@ func (s *Set) Empty() bool { return s == nil || len(s.byRuleID) == 0 }
 //
 // Validation:
 //   - rule_id required
-//   - justification required (CLAUDE.md §9 — undocumented suppressions
-//     defeat the whole point)
+//   - justification required — undocumented suppressions defeat the
+//     whole point
 //   - expires_at, when present, parses as YYYY-MM-DD
 //   - duplicate rule_ids rejected
 func Load(path string) (*Set, error) {

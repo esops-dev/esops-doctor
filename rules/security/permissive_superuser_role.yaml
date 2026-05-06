@@ -1,0 +1,39 @@
+checks:
+  - id: permissive_superuser_role
+    name: Custom role grants cluster-wide all-on-all
+    category: security
+    severity: error
+    description: >
+      A non-reserved role that grants the `all` cluster privilege over
+      the `*` index pattern is functionally equivalent to the cluster's
+      built-in superuser. Custom roles of this shape mean somebody
+      built a "make this work" role rather than scoping a use case;
+      surface them so the principle of least privilege can be
+      reconsidered.
+    probe: security_audit
+    condition: |
+      !has(self.roles) ||
+      self.roles.all(r,
+        (has(r.reserved) && r.reserved == true) ||
+        !has(r.cluster_privileges) ||
+        !r.cluster_privileges.exists(p, p == 'all') ||
+        !has(r.index_patterns) ||
+        !r.index_patterns.exists(p, p == '*')
+      )
+    count_expression: |
+      has(self.roles) ?
+        size(self.roles.filter(r,
+          (!has(r.reserved) || r.reserved == false) &&
+          has(r.cluster_privileges) &&
+          r.cluster_privileges.exists(p, p == 'all') &&
+          has(r.index_patterns) &&
+          r.index_patterns.exists(p, p == '*')
+        )) : 0
+    message: '{{count}} custom role(s) grant cluster=all on indices=*.'
+    remediation:
+      command: Replace the broad role with one scoped to the privileges and index patterns the use case actually needs
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/built-in-roles.html
+    tags: [prod, security]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

@@ -1,0 +1,19 @@
+rule: ilm_policy_present
+cases:
+  - name: one policy passes
+    expect: pass
+    data:
+      - name: logs-hot-warm-delete
+        version: 1
+        modified_date: "2024-01-01T00:00:00Z"
+
+  - name: many policies pass
+    expect: pass
+    data:
+      - name: logs
+      - name: metrics
+      - name: traces
+
+  - name: zero policies fail
+    expect: fail
+    data: []

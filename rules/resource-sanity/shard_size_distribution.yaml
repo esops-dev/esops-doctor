@@ -1,0 +1,39 @@
+checks:
+  - id: shard_size_distribution
+    name: Average primary shard size above recommended ceiling
+    category: resource_sanity
+    severity: warn
+    description: >
+      Primary shards above ~50 GiB recover slowly, push merge memory
+      pressure, and complicate snapshot/restore parallelism. Flag any
+      open index whose average primary shard size (primary_store_bytes
+      divided by primary count) is at or above 50 GiB so operators can
+      plan a rollover or shrink. System indices (dot-prefixed) are
+      excluded — their lifecycle is controlled by the cluster, not the
+      operator.
+    probe: indices
+    condition: |
+      size(self) == 0 ||
+      self.all(idx,
+        !has(idx.name) || idx.name.startsWith('.') ||
+        !has(idx.status) || idx.status != 'open' ||
+        !has(idx.primaries) || int(idx.primaries) == 0 ||
+        !has(idx.primary_store_bytes) ||
+        (int(idx.primary_store_bytes) / int(idx.primaries)) < 50 * 1024 * 1024 * 1024
+      )
+    count_expression: |
+      size(self.filter(idx,
+        has(idx.name) && !idx.name.startsWith('.') &&
+        has(idx.status) && idx.status == 'open' &&
+        has(idx.primaries) && int(idx.primaries) > 0 &&
+        has(idx.primary_store_bytes) &&
+        (int(idx.primary_store_bytes) / int(idx.primaries)) >= 50 * 1024 * 1024 * 1024
+      ))
+    message: '{{count}} index/indices with average primary shard size at or above 50 GiB.'
+    remediation:
+      command: Roll over the index, increase the primary count via shrink/split, or attach an ILM/ISM policy that rolls over before this size is reached
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/size-your-shards.html
+    tags: [prod, performance]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

@@ -1,0 +1,24 @@
+checks:
+  - id: deprecation_log_critical
+    name: Critical deprecations reported by the cluster
+    category: hygiene
+    severity: error
+    description: >
+      Issues at level critical from /_migration/deprecations block the
+      next major-version upgrade. Every entry must be addressed before
+      the cluster will accept the new binary; surface them now so the
+      upgrade window doesn't surprise the operator.
+    probe: deprecation_log
+    condition: |
+      size(self) == 0 ||
+      self.all(d, !has(d.level) || d.level != 'critical')
+    count_expression: |
+      size(self.filter(d, has(d.level) && d.level == 'critical'))
+    message: '{{count}} critical deprecation(s) reported by /_migration/deprecations.'
+    remediation:
+      command: Run `esops-doctor scan --rule-id deprecation_log_critical --output json` to see each issue, then follow the per-issue url field to resolve
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/migration-api-deprecation.html
+    tags: [hygiene, upgrade]
+    dialects: [elasticsearch]
+    affected_versions: ["7.x", "8.x", "9.x"]
+    effort: medium

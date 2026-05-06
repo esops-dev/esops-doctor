@@ -1,0 +1,32 @@
+checks:
+  - id: api_keys_no_expiration
+    name: Active API keys without expiration
+    category: security
+    severity: warn
+    description: >
+      Long-lived API keys are an effective bearer credential — once
+      issued, they survive operator turnover, scope changes, and
+      forgotten use cases. Setting an expiration forces a rotation
+      cadence. Flag any active (non-invalidated) API key whose
+      expiration field is empty.
+    probe: security_audit
+    condition: |
+      !has(self.api_keys) ||
+      self.api_keys.all(k,
+        (has(k.invalidated) && k.invalidated == true) ||
+        (has(k.expiration) && k.expiration != '')
+      )
+    count_expression: |
+      has(self.api_keys) ?
+        size(self.api_keys.filter(k,
+          (!has(k.invalidated) || k.invalidated == false) &&
+          (!has(k.expiration) || k.expiration == '')
+        )) : 0
+    message: '{{count}} active API key(s) have no expiration set.'
+    remediation:
+      command: Re-issue the affected keys with an explicit expiration via the security API and invalidate the originals
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/security-api-create-api-key.html
+    tags: [prod, security]
+    dialects: [elasticsearch]
+    affected_versions: ["7.x", "8.x", "9.x"]
+    effort: medium

@@ -22,9 +22,9 @@ import (
 var ErrUsage = errors.New("usage error")
 
 // ErrCatalog is the marker for rule-catalog load and validate failures.
-// Per §10 of CLAUDE.md these map to exit code 21 — distinct from the
-// findings-threshold exit (20) so CI can tell "rules broken" apart from
-// "rules ran and flagged something".
+// These map to exit code 21 — distinct from the findings-threshold
+// exit (20) so CI can tell "rules broken" apart from "rules ran and
+// flagged something".
 var ErrCatalog = errors.New("rule catalog error")
 
 // Cluster-side sentinels. probes.Connect wraps the upstream pkg/client

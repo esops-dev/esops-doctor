@@ -106,7 +106,7 @@ type sarifText struct {
 // surface the result as accepted-with-justification rather than
 // double-counting it as a fresh failure. Expired waivers do NOT
 // emit a suppression — the failure is live by then, and the rotted
-// waiver is already prefixed into the message text (CLAUDE.md §9).
+// waiver is already prefixed into the message text.
 type sarifSuppression struct {
 	Kind          string `json:"kind"`
 	Status        string `json:"status,omitempty"`

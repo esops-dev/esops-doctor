@@ -1,0 +1,41 @@
+checks:
+  - id: mapping_total_fields_limit_high
+    name: Index raises total_fields.limit far above default
+    category: destructive_ops
+    severity: warn
+    description: >
+      Default index.mapping.total_fields.limit is 1000 — a deliberate
+      ceiling against unbounded field explosions from dynamic
+      mappings. An index that bumps it past 5000 is either modelling
+      a genuinely-wide schema or papering over an upstream producer
+      sending unbounded keys. Either way the cluster is on the hook
+      for the heap cost; surface the override so the trade-off is
+      explicit.
+    probe: index_settings
+    condition: |
+      size(self) == 0 ||
+      self.all(idx,
+        !has(idx.settings) ||
+        !has(idx.settings.index) ||
+        !has(idx.settings.index.mapping) ||
+        !has(idx.settings.index.mapping.total_fields) ||
+        !has(idx.settings.index.mapping.total_fields.limit) ||
+        int(idx.settings.index.mapping.total_fields.limit) <= 5000
+      )
+    count_expression: |
+      size(self.filter(idx,
+        has(idx.settings) &&
+        has(idx.settings.index) &&
+        has(idx.settings.index.mapping) &&
+        has(idx.settings.index.mapping.total_fields) &&
+        has(idx.settings.index.mapping.total_fields.limit) &&
+        int(idx.settings.index.mapping.total_fields.limit) > 5000
+      ))
+    message: '{{count}} index/indices set index.mapping.total_fields.limit above 5000.'
+    remediation:
+      command: Investigate the producer creating fields; consider a fixed mapping or runtime fields rather than expanding the limit
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-settings-limit.html
+    tags: [destructive_ops, mappings]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

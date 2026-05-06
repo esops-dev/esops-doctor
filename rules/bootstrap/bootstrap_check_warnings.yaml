@@ -1,0 +1,30 @@
+checks:
+  - id: bootstrap_check_warnings
+    name: Cluster reports bootstrap-check warnings
+    category: bootstrap
+    severity: warn
+    description: >
+      The cluster's own bootstrap-check machinery surfaces per-node
+      warnings (max_map_count, mmapfs limits, vm.swappiness, system
+      call filter availability, etc.). Each entry is a check the
+      cluster ran and decided was misconfigured. Surface the count so
+      an operator pulls the per-warning text from `--output json` and
+      addresses each one.
+    probe: node_bootstrap
+    condition: |
+      size(self) == 0 ||
+      self.all(n,
+        !has(n.bootstrap_warnings) || size(n.bootstrap_warnings) == 0
+      )
+    count_expression: |
+      size(self.filter(n,
+        has(n.bootstrap_warnings) && size(n.bootstrap_warnings) > 0
+      ))
+    message: '{{count}} node(s) reporting bootstrap-check warnings.'
+    remediation:
+      command: Inspect the per-node bootstrap_warnings list (esops-doctor scan --output json | jq) and resolve each warning per the cluster's own reference
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/bootstrap-checks.html
+    tags: [prod, bootstrap]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

@@ -2,8 +2,8 @@
 //
 // The default table format prints one row per failing rule plus
 // summary footers covering passes, skipped (with reason), and per-rule
-// errors. Skipped is *reported* (not silent) per CLAUDE.md §3 so an
-// operator sees that a rule was inapplicable rather than absent.
+// errors. Skipped is *reported* (not silent) so an operator sees
+// that a rule was inapplicable rather than absent.
 package report
 
 import (
@@ -129,8 +129,7 @@ func formatDuration(d time.Duration) string {
 // summary is the per-status / per-severity tally surfaced in the footer
 // and used by the cli to decide the exit code. Waived counts active
 // (non-expired) waivers; expired waivers fall back into the severity
-// columns because the suppression failed and the finding fires loud
-// (CLAUDE.md §9).
+// columns because the suppression failed and the finding fires loud.
 type summary struct {
 	critical, error, warn, info int
 	passed, skipped, errored    int
@@ -202,7 +201,7 @@ func MaxFailingSeverity(results []engine.RuleResult) findings.Severity {
 // either has no waiver or has one that's already expired. An expired
 // waiver lands in this table (its message already carries the
 // "[waiver expired …]" prefix from the waivers Apply step) so the
-// failure stays loud per CLAUDE.md §9.
+// failure stays loud.
 func writeFindings(w io.Writer, dialect string, results []engine.RuleResult) error {
 	var fails []engine.RuleResult
 	for _, r := range results {

@@ -1,0 +1,31 @@
+checks:
+  - id: zone_awareness
+    name: Allocation awareness attributes not configured
+    category: resource_sanity
+    severity: warn
+    description: >
+      cluster.routing.allocation.awareness.attributes makes the cluster
+      spread primary and replica copies across the named attribute
+      values (zone, rack, datacenter…). Without it, a multi-node
+      cluster may place every replica of a shard in the same failure
+      domain — defeating the point of the replica. Recommended for
+      any multi-AZ deployment; waiver friendly for single-AZ setups.
+    probe: cluster_settings_full
+    condition: |
+      (has(self.persistent) &&
+       'cluster.routing.allocation.awareness.attributes' in self.persistent) ||
+      (has(self.transient) &&
+       'cluster.routing.allocation.awareness.attributes' in self.transient)
+    count_expression: |
+      ((has(self.persistent) &&
+        'cluster.routing.allocation.awareness.attributes' in self.persistent) ||
+       (has(self.transient) &&
+        'cluster.routing.allocation.awareness.attributes' in self.transient)) ? 0 : 1
+    message: cluster.routing.allocation.awareness.attributes is not set.
+    remediation:
+      command: Set cluster.routing.allocation.awareness.attributes to your zone/rack attribute name and tag each node's node.attr.<name> accordingly
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-cluster.html#shard-allocation-awareness
+    tags: [prod, availability]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

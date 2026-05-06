@@ -1,0 +1,45 @@
+rule: permissive_superuser_role
+cases:
+  - name: no roles list passes
+    expect: pass
+    data:
+      tls: { scheme: https }
+      status: { dialect: elasticsearch, enabled: true }
+
+  - name: only reserved roles pass
+    expect: pass
+    data:
+      status: { dialect: elasticsearch, enabled: true }
+      roles:
+        - name: superuser
+          reserved: true
+          cluster_privileges: [all]
+          index_patterns: ["*"]
+        - name: monitor
+          reserved: true
+          cluster_privileges: [monitor]
+          index_patterns: ["*"]
+
+  - name: scoped custom role passes
+    expect: pass
+    data:
+      status: { dialect: elasticsearch, enabled: true }
+      roles:
+        - name: app_writer
+          reserved: false
+          cluster_privileges: [monitor]
+          index_patterns: ["app-*"]
+
+  - name: custom role with all-on-all flags
+    expect: fail
+    data:
+      status: { dialect: elasticsearch, enabled: true }
+      roles:
+        - name: do_anything
+          reserved: false
+          cluster_privileges: [all]
+          index_patterns: ["*"]
+        - name: app_reader
+          reserved: false
+          cluster_privileges: [monitor]
+          index_patterns: ["app-*"]

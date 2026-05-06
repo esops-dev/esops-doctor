@@ -1,0 +1,36 @@
+rule: bootstrap_memory_lock
+cases:
+  - name: empty node list passes
+    expect: pass
+    data: []
+
+  - name: every node mlocked passes
+    expect: pass
+    data:
+      - name: n1
+        mlockall_enabled: true
+        max_file_descriptors: 65535
+      - name: n2
+        mlockall_enabled: true
+        max_file_descriptors: 65535
+
+  - name: missing field treated as ok (cluster did not report)
+    expect: pass
+    data:
+      - name: n1
+
+  - name: one node not mlocked flags
+    expect: fail
+    data:
+      - name: n1
+        mlockall_enabled: true
+      - name: n2
+        mlockall_enabled: false
+
+  - name: every node not mlocked flags
+    expect: fail
+    data:
+      - name: n1
+        mlockall_enabled: false
+      - name: n2
+        mlockall_enabled: false

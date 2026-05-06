@@ -1,0 +1,31 @@
+checks:
+  - id: catchall_index_template
+    name: Composable template with a catch-all index pattern
+    category: mappings
+    severity: warn
+    description: >
+      A template whose index_patterns contains a bare "*" matches every
+      future index — including ones a more specific template was meant
+      to govern. Catch-all templates make mapping behaviour depend on
+      template-priority race conditions and silently catch operator-
+      created scratch indices.
+    probe: index_templates
+    condition: |
+      size(self) == 0 ||
+      self.all(t,
+        !has(t.index_patterns) ||
+        !t.index_patterns.exists(p, p == '*')
+      )
+    count_expression: |
+      size(self.filter(t,
+        has(t.index_patterns) &&
+        t.index_patterns.exists(p, p == '*')
+      ))
+    message: '{{count}} composable template(s) with a bare "*" index pattern.'
+    remediation:
+      command: Replace the catch-all "*" pattern with a specific prefix (e.g. "logs-*", "metrics-*") so the template only matches its intended indices
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/index-templates.html
+    tags: [hygiene, mappings]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: low

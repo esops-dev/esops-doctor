@@ -36,7 +36,9 @@ var connectFn probes.Connector = probes.Connect
 // scanCommand is the diagnostic entry point: load config, resolve the
 // target context (or honour --url), connect via probes.Connect, compile
 // the embedded rule catalog, evaluate, and emit a report. Exit codes
-// follow CLAUDE.md §10; severity-threshold gating uses --fail-on.
+// follow the documented schedule (3 cluster unreachable, 4 auth, 5 authz,
+// 10 unknown product, 20 findings ≥ threshold); severity-threshold
+// gating uses --fail-on.
 func scanCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "scan",
@@ -116,13 +118,14 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 	}
 
 	if cmd.Bool("cluster-waivers") {
-		// CLAUDE.md §3 forbids reaching around pkg/client to read
-		// cluster documents directly, and pkg/client does not
-		// currently expose a Search/document-read capability. The
-		// flag is wired so its name is reserved and discoverable;
-		// the upstream capability is the unblocking dependency.
-		return exit.Usage("--cluster-waivers is documented but not yet implemented: " +
-			"esops-go/pkg/client does not expose a document-read capability (see CLAUDE.md §3); " +
+		// Doctor's read-only-by-construction model forbids reaching
+		// around pkg/client to read cluster documents directly. The
+		// upstream document-read capability now exists; wiring it
+		// through into a cluster-side waiver source is its own
+		// milestone. Until then the flag's name stays reserved and
+		// discoverable, and operators get a clear "not yet" rather
+		// than a silent no-op.
+		return exit.Usage("--cluster-waivers is documented but not yet implemented; " +
 			"file-based waivers via --waivers are wired and ready")
 	}
 
@@ -212,7 +215,7 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 	// Annotate findings with operator-supplied waivers before the
 	// report renders or the exit-code gate runs. Active suppressions
 	// drop out of MaxFailingSeverity / fail-on; expired ones stay
-	// loud (CLAUDE.md §9).
+	// loud — the suppression cannot rot silently.
 	if !waiverSet.Empty() {
 		waiverSet.Apply(scanStart, results)
 		logging.Logger().Info("doctor.scan.waivers.applied",

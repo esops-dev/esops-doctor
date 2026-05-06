@@ -5,7 +5,7 @@
 // "we know about it; here's why". Each waiver carries a required
 // justification and an optional expires_at. Expired waivers fail loud
 // (the finding re-surfaces with a "waiver expired" note prepended to
-// the message) so the suppression cannot rot silently — CLAUDE.md §9.
+// the message) so the suppression cannot rot silently.
 //
 // Concurrency: Set.Apply mutates each matched RuleResult.Finding in
 // place. Callers that render results in parallel must call Apply

@@ -1,0 +1,29 @@
+rule: unassigned_shards
+cases:
+  - name: zero unassigned shards
+    expect: pass
+    data:
+      cluster_name: prod
+      status: green
+      unassigned_shards: 0
+      number_of_nodes: 5
+
+  - name: field absent treated as zero
+    expect: pass
+    data:
+      cluster_name: prod
+      status: green
+
+  - name: one unassigned shard fails
+    expect: fail
+    data:
+      cluster_name: prod
+      status: yellow
+      unassigned_shards: 1
+
+  - name: many unassigned shards fail
+    expect: fail
+    data:
+      cluster_name: prod
+      status: red
+      unassigned_shards: 42

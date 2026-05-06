@@ -1,0 +1,23 @@
+checks:
+  - id: unassigned_shards
+    name: Cluster has unassigned shards
+    category: resource_sanity
+    severity: error
+    description: >
+      Unassigned shards mean some primary or replica is not currently
+      allocated — a yellow or red cluster as far as the affected indices
+      are concerned. Surface the count from /_cluster/health so the
+      operator can investigate via /_cluster/allocation/explain.
+    probe: cluster_health
+    condition: |
+      !has(self.unassigned_shards) || int(self.unassigned_shards) == 0
+    count_expression: |
+      has(self.unassigned_shards) ? int(self.unassigned_shards) : 0
+    message: '{{count}} unassigned shard(s) reported by /_cluster/health.'
+    remediation:
+      command: Run /_cluster/allocation/explain on the affected indices to identify why allocation cannot proceed
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-allocation-explain.html
+    tags: [prod, availability]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

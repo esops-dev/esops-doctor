@@ -1,0 +1,21 @@
+rule: node_to_node_encryption
+cases:
+  - name: transport TLS enabled and verified passes
+    expect: pass
+    data:
+      transport_tls_enabled: true
+      transport_tls_verified: true
+
+  - name: enabled even without verification passes
+    expect: pass
+    data:
+      transport_tls_enabled: true
+
+  - name: explicitly disabled fails
+    expect: fail
+    data:
+      transport_tls_enabled: false
+
+  - name: missing field treated as not enabled
+    expect: fail
+    data: {}

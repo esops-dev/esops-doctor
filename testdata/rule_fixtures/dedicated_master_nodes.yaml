@@ -1,0 +1,49 @@
+rule: dedicated_master_nodes
+cases:
+  - name: three dedicated masters plus data nodes passes
+    expect: pass
+    data:
+      - name: m1
+        roles: [master]
+      - name: m2
+        roles: [master]
+      - name: m3
+        roles: [master]
+      - name: d1
+        roles: [data, ingest]
+      - name: d2
+        roles: [data, ingest]
+
+  - name: small two-node cluster is skipped
+    expect: pass
+    data:
+      - name: n1
+        roles: [master, data]
+      - name: n2
+        roles: [master, data]
+
+  - name: master role mixed with data role is not dedicated
+    expect: fail
+    data:
+      - name: n1
+        roles: [master, data]
+      - name: n2
+        roles: [master, data]
+      - name: n3
+        roles: [master, data]
+      - name: d1
+        roles: [data]
+
+  - name: only one dedicated master in a five-node cluster
+    expect: fail
+    data:
+      - name: m1
+        roles: [master]
+      - name: d1
+        roles: [data]
+      - name: d2
+        roles: [data]
+      - name: d3
+        roles: [data]
+      - name: d4
+        roles: [data]

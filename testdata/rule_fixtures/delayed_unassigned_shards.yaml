@@ -1,0 +1,28 @@
+rule: delayed_unassigned_shards
+cases:
+  - name: zero delayed shards
+    expect: pass
+    data:
+      cluster_name: prod
+      status: green
+      delayed_unassigned_shards: 0
+
+  - name: field absent treated as zero
+    expect: pass
+    data:
+      cluster_name: prod
+      status: yellow
+
+  - name: one delayed shard fails
+    expect: fail
+    data:
+      cluster_name: prod
+      status: yellow
+      delayed_unassigned_shards: 1
+
+  - name: many delayed shards fail
+    expect: fail
+    data:
+      cluster_name: prod
+      status: yellow
+      delayed_unassigned_shards: 5

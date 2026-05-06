@@ -1,0 +1,24 @@
+checks:
+  - id: cluster_health_status
+    name: Cluster health is not green
+    category: hygiene
+    severity: warn
+    description: >
+      A non-green cluster has at least one shard the cluster considers
+      unhealthy. Yellow is "primaries assigned, some replicas missing"
+      — operationally tolerable but worth investigating before the next
+      node failure makes it red. Red means at least one primary is
+      unassigned and queries against the affected indices will fail.
+    probe: cluster_health
+    condition: |
+      has(self.status) && self.status == 'green'
+    count_expression: |
+      (has(self.status) && self.status == 'green') ? 0 : 1
+    message: Cluster health is not green.
+    remediation:
+      command: Check /_cluster/health and /_cluster/allocation/explain to identify which indices are non-green and why
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-health.html
+    tags: [hygiene, availability]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium
