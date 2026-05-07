@@ -42,10 +42,34 @@ make build
 make test
 make lint
 make vuln
+make bin-size       # check the stripped binary stays under budget
 ```
 
 Integration tests use `testcontainers-go` and are gated by the
 `integration` build tag.
+
+## Shell completions
+
+Pre-generated completion scripts live in `completions/` and ship in
+the release archives and `.deb`/`.rpm` packages. To install from a
+local checkout:
+
+```sh
+# bash
+sudo install -m 0644 completions/esops-doctor.bash \
+    /usr/share/bash-completion/completions/esops-doctor
+
+# zsh — drop on $fpath, e.g.
+sudo install -m 0644 completions/_esops-doctor /usr/share/zsh/site-functions/
+
+# fish
+install -m 0644 completions/esops-doctor.fish \
+    ~/.config/fish/completions/esops-doctor.fish
+```
+
+The binary also responds to `esops-doctor completion bash|zsh` for
+on-the-fly generation. `completion fish` is unsafe — see the note in
+`completions/esops-doctor.fish` for why the static file is canonical.
 
 ## License
 

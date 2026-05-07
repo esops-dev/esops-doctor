@@ -52,6 +52,25 @@ security: ## Run gosec and govulncheck
 	PATH="$(GOBIN):$$PATH" gosec ./...
 	PATH="$(GOBIN):$$PATH" govulncheck ./...
 
+.PHONY: vuln
+vuln: ## Run govulncheck (subset of `security` that does not need gosec)
+	@command -v govulncheck >/dev/null || $(GO) install golang.org/x/vuln/cmd/govulncheck@latest
+	PATH="$(GOBIN):$$PATH" govulncheck ./...
+
+# Binary-budget audit. CLAUDE.md §11 calls for ~35–45 MB stripped; the
+# guard here matches MaxStrippedBinarySize in internal/cli/binary_test.go
+# so a developer running `make bin-size` and CI exercise the same number.
+BIN_BUDGET_BYTES ?= 78643200    # 75 MiB
+
+.PHONY: bin-size
+bin-size: build ## Print stripped binary size; fail if it exceeds $(BIN_BUDGET_BYTES)
+	@size=$$(stat -f%z bin/$(BINARY) 2>/dev/null || stat -c%s bin/$(BINARY)); \
+	echo "$(BINARY): $$size bytes ($$((size / 1024 / 1024)) MiB)"; \
+	if [ "$$size" -gt "$(BIN_BUDGET_BYTES)" ]; then \
+		echo "FAIL: $(BINARY) exceeds budget of $(BIN_BUDGET_BYTES) bytes" >&2; \
+		exit 1; \
+	fi
+
 .PHONY: tidy
 tidy:
 	go mod tidy

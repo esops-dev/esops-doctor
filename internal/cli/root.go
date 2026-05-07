@@ -31,8 +31,15 @@ func newRoot() *cli.Command {
 			"reports findings with severities and remediation hints.\n\n" +
 			"It is read-only by construction: every cluster operation goes through\n" +
 			"the read-only capability surface of esops-go.",
-		Flags:  globalFlags(),
-		Before: initLogger,
+		// EnableShellCompletion lets the binary respond to
+		// --generate-shell-completion when sourced from the bundled
+		// scripts under completions/. Operators install the script
+		// once (per-shell convention, see CONTRIBUTING.md), and tab-
+		// completion thereafter works without doctor learning a
+		// dedicated `completion` subcommand.
+		EnableShellCompletion: true,
+		Flags:                 globalFlags(),
+		Before:                initLogger,
 		Commands: []*cli.Command{
 			scanCommand(),
 			listRulesCommand(),
