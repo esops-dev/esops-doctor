@@ -43,6 +43,12 @@ jobs:
           cache: true
       - name: build
         run: make build
+      - name: bin-size
+        # Binary-budget gate. CLAUDE.md §11 caps the stripped binary at
+        # ~45 MB; the Makefile's BIN_BUDGET_BYTES variable carries the
+        # current allowance. A breach is a signal to do a dep audit
+        # before raising the limit, not to silently bump it here.
+        run: make bin-size
       - name: test
         run: go test -race -count=1 -coverprofile=coverage.out ./...
 

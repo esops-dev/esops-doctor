@@ -82,6 +82,10 @@ func scanCommand() *cli.Command {
 				Name:  "cluster-waivers",
 				Usage: "Also read suppressions from the .esops-doctor-waivers index (not yet implementable: pkg/client lacks document-read capability)",
 			},
+			&cli.StringSliceFlag{
+				Name:  "targets",
+				Usage: "Multi-cluster fan-out: comma-separated context names from the esops config (repeatable)",
+			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return runScan(ctx, cmd, cmdWriter(cmd))
@@ -135,24 +139,69 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 		return err
 	}
 
-	ctxCfg, err := resolveTargetContext(cmd)
+	multiTargets, isMulti, err := resolveMultiTargets(cmd)
 	if err != nil {
 		return err
 	}
 
-	fullCat, err := loadLayeredCatalog(cmd.String("rules-dir"))
+	eng, waiverSet, err := buildEngineAndWaivers(cmd)
 	if err != nil {
 		return err
 	}
-	cat, err := applyProfile(cmd, fullCat)
+
+	opts := report.Options{
+		SummaryOnly: cmd.Bool("summary-only"),
+		Quiet:       cmd.Bool("quiet"),
+	}
+
+	if isMulti {
+		return runMultiClusterScan(ctx, stdout, format, opts, failOn, eng, waiverSet, multiTargets)
+	}
+
+	ctxCfg, err := resolveTargetContext(cmd)
 	if err != nil {
 		return err
+	}
+	target := targetSpec{Label: ctxCfg.URL, Context: ctxCfg}
+
+	outcome := scanOneCluster(ctx, eng, waiverSet, target)
+	if outcome.connectErr != nil {
+		return outcome.connectErr
+	}
+
+	if err := report.Render(format, stdout, outcome.Header, outcome.Results, opts); err != nil {
+		return fmt.Errorf("rendering report: %w", err)
+	}
+
+	if max := report.MaxFailingSeverity(outcome.Results); max >= failOn {
+		// Silent so main does not double-print: the report has already
+		// said what failed; the exit-code wrapper carries the marker.
+		return exit.Silent(fmt.Errorf("%w: max severity=%s, threshold=%s",
+			exit.ErrFindings, max, failOn))
+	}
+	return nil
+}
+
+// buildEngineAndWaivers loads the embedded + layered rule catalog,
+// applies --profile and --tags / --skip-tags / --rule-id filters, loads
+// the waivers file and resolves deprecated-alias keys, then compiles
+// the engine. The compiled engine is reusable across multiple targets
+// — it carries no per-cluster state — so a multi-cluster scan compiles
+// once and prefetches/evaluates against each cluster in turn.
+func buildEngineAndWaivers(cmd *cli.Command) (*engine.Engine, *waivers.Set, error) {
+	fullCat, err := loadLayeredCatalog(cmd.String("rules-dir"))
+	if err != nil {
+		return nil, nil, err
+	}
+	cat, err := applyProfile(cmd, fullCat)
+	if err != nil {
+		return nil, nil, err
 	}
 	cat = applyScanFilters(cmd, cat)
 
 	waiverSet, err := loadWaivers(cmd)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	// Resolve waivers keyed by deprecated_alias against the unfiltered
 	// catalog so an alias used in a waiver still matches when the
@@ -172,22 +221,51 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 	if err != nil {
 		var ce *engine.CompileError
 		if errors.As(err, &ce) {
-			return exit.Catalog("%s", err.Error())
+			return nil, nil, exit.Catalog("%s", err.Error())
 		}
-		return exit.Catalog("compiling rules: %s", err)
+		return nil, nil, exit.Catalog("compiling rules: %s", err)
 	}
+	return eng, waiverSet, nil
+}
+
+// clusterOutcome carries everything one cluster's scan produced. The
+// connectErr field captures connect-time failures (transport / auth /
+// authz / unknown product) so the multi-cluster path can render a
+// per-target error block instead of bailing the whole fleet scan.
+// Single-cluster callers handle connectErr by propagating it directly,
+// preserving today's exit-code semantics.
+type clusterOutcome struct {
+	Label      string
+	Header     report.Header
+	Results    []engine.RuleResult
+	connectErr error
+}
+
+// scanOneCluster runs the per-cluster part of a scan: connect, fetch
+// the health summary, prefetch every applicable probe, evaluate the
+// engine against the cache, apply waivers, and build the report
+// header. It does not render — the caller decides whether the output
+// is single-cluster (existing behaviour) or one block in a
+// multi-cluster report.
+//
+// The engine is reused across calls; nothing here mutates it.
+func scanOneCluster(ctx context.Context, eng *engine.Engine, waiverSet *waivers.Set, target targetSpec) clusterOutcome {
+	out := clusterOutcome{Label: target.Label}
 
 	// scanStart is the operator-facing "when the scan ran" timestamp:
-	// the moment we begin reaching out to the cluster. duration below
-	// measures only the engine phase (prefetch + evaluate) because
-	// that's the cost-relevant number for catalog-growth triage; CLI
-	// startup and connect are bounded by other timeouts.
+	// the moment we begin reaching out to the cluster. The Duration
+	// field below covers only the engine phase (prefetch + evaluate)
+	// because that's the cost-relevant number for catalog-growth
+	// triage; CLI startup and connect are bounded by other timeouts.
 	scanStart := time.Now()
 
-	logging.Logger().Info("doctor.scan.connect", "addresses", ctxCfg.Addresses())
-	cl, err := connectFn(ctx, ctxCfg)
+	logging.Logger().Info("doctor.scan.connect",
+		"target", target.Label,
+		"addresses", target.Context.Addresses())
+	cl, err := connectFn(ctx, target.Context)
 	if err != nil {
-		return err
+		out.connectErr = err
+		return out
 	}
 	dialect := string(cl.Info.Dialect)
 
@@ -200,7 +278,8 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 	// duplicates the call any rule using cluster_health makes.
 	healthSummary, healthErr := probes.FetchHealthSummary(ctx, cl)
 	if healthErr != nil {
-		logging.Logger().Debug("doctor.scan.health_summary.failed", "err", healthErr)
+		logging.Logger().Debug("doctor.scan.health_summary.failed",
+			"target", target.Label, "err", healthErr)
 	}
 
 	evalStart := time.Now()
@@ -219,13 +298,14 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 	if !waiverSet.Empty() {
 		waiverSet.Apply(scanStart, results)
 		logging.Logger().Info("doctor.scan.waivers.applied",
+			"target", target.Label,
 			"count", waivers.AppliedCount(results),
 			"source", waiverSet.Source())
 	}
 
 	logRuleTimings(results)
 
-	header := report.Header{
+	out.Header = report.Header{
 		ClusterName:     cl.Info.ClusterName,
 		Dialect:         dialect,
 		Version:         cl.Info.Version,
@@ -239,20 +319,8 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 		ToolCommit:      version.Commit,
 		ToolEsopsModule: version.EsopsModule,
 	}
-	if err := report.Render(format, stdout, header, results, report.Options{
-		SummaryOnly: cmd.Bool("summary-only"),
-		Quiet:       cmd.Bool("quiet"),
-	}); err != nil {
-		return fmt.Errorf("rendering report: %w", err)
-	}
-
-	if max := report.MaxFailingSeverity(results); max >= failOn {
-		// Silent so main does not double-print: the report has already
-		// said what failed; the exit-code wrapper carries the marker.
-		return exit.Silent(fmt.Errorf("%w: max severity=%s, threshold=%s",
-			exit.ErrFindings, max, failOn))
-	}
-	return nil
+	out.Results = results
+	return out
 }
 
 // logRuleTimings emits one debug-level log line per rule with status,

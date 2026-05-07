@@ -24,6 +24,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -81,7 +82,52 @@ func TestIntegrationElasticsearch(t *testing.T) {
 	t.Cleanup(cancel)
 
 	cc := startElasticsearch(t, ctx)
-	sweepProbesAgainstCluster(t, ctx, cc, "elasticsearch", notApplicableOnES, nil)
+	sweepProbesAgainstCluster(t, ctx, cc, "elasticsearch", notApplicableOnES, skippedOnESForVersion(t, ctx, cc))
+}
+
+// skippedOnESForVersion returns the per-image skip set for the connected
+// Elasticsearch version. Today the only entry is security_audit on ES <
+// 9.x: the test container starts with xpack.security.enabled=false, and
+// on those older versions GET /_security/user answers HTTP 405
+// "Incorrect HTTP method ... allowed: [POST]" rather than the
+// disabled-security bodies the upstream adapter recognises in
+// isSecurityDisabledBody. The audit therefore returns an error rather
+// than Status.Enabled=false.
+//
+// Drop the entry once esops-go's ES adapter learns to treat the 405
+// "method not allowed" body as a disabled-security signal, or once the
+// integration container is reconfigured with security enabled (which
+// would require admin credentials + TLS plumbing that the test setup
+// deliberately avoids).
+func skippedOnESForVersion(t *testing.T, ctx context.Context, cc config.Context) map[string]bool {
+	t.Helper()
+	cl, err := Connect(ctx, cc)
+	if err != nil {
+		// Connect already runs once inside sweepProbesAgainstCluster; if
+		// it fails here, return nil and let the sweep surface the real
+		// failure with its richer message.
+		return nil
+	}
+	major := majorVersion(cl.Info.Version)
+	if major > 0 && major < 9 {
+		return map[string]bool{SecurityAudit: true}
+	}
+	return nil
+}
+
+// majorVersion parses the leading integer of a "X.Y.Z" version string.
+// Returns 0 when the string is empty or doesn't lead with a digit, so
+// callers can treat 0 as "unknown — don't skip anything".
+func majorVersion(v string) int {
+	dot := strings.IndexByte(v, '.')
+	if dot <= 0 {
+		return 0
+	}
+	n, err := strconv.Atoi(v[:dot])
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 func TestIntegrationOpenSearch(t *testing.T) {

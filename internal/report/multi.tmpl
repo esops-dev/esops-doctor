@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>esops-doctor fleet scan</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #6b6b6b;
+  --border: #e1e4e8;
+  --accent: #0366d6;
+  --critical: #b00020;
+  --error: #d04a02;
+  --warn: #b5800c;
+  --info: #0366d6;
+  --pass: #2e7d32;
+  --skipped: #6b6b6b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --fg: #e6edf3;
+    --muted: #8b949e;
+    --border: #30363d;
+    --accent: #58a6ff;
+    --critical: #ff6b6b;
+    --error: #f0883e;
+    --warn: #d29922;
+    --info: #58a6ff;
+    --pass: #56d364;
+    --skipped: #8b949e;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.wrap { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+header h1 { margin: 0 0 0.25rem; font-size: 1.5rem; }
+header .meta { color: var(--muted); margin: 0 0 1rem; font-size: 0.9rem; }
+.counts { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+.counts .pill {
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--fg);
+  font-size: 0.85rem;
+}
+.pill.critical { background: var(--critical); color: white; }
+.pill.error { background: var(--error); color: white; }
+.pill.warn { background: var(--warn); color: white; }
+.pill.info { background: var(--info); color: white; }
+.pill.pass { background: var(--pass); color: white; }
+.pill.errored { background: var(--error); color: white; }
+.cluster-section { margin-top: 2rem; padding-top: 1rem; border-top: 2px solid var(--border); }
+.cluster-section h2 { margin: 0 0 0.25rem; font-size: 1.2rem; }
+.cluster-section .cluster-meta { color: var(--muted); font-size: 0.9rem; margin: 0 0 0.75rem; }
+.connect-error { padding: 1rem; border-radius: 6px; background: var(--error); color: white; }
+.connect-error .label { font-weight: 600; margin-right: 0.5rem; }
+table { border-collapse: collapse; width: 100%; margin-bottom: 1rem; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { background: var(--border); font-weight: 600; font-size: 0.85rem; }
+td.sev.critical { color: var(--critical); font-weight: 600; }
+td.sev.error { color: var(--error); font-weight: 600; }
+td.sev.warn { color: var(--warn); font-weight: 600; }
+td.sev.info { color: var(--info); }
+td.status.pass { color: var(--pass); }
+td.status.skipped { color: var(--skipped); }
+td.status.errored { color: var(--error); font-weight: 600; }
+td.status.fail { color: var(--error); font-weight: 600; }
+td.status.waived { color: var(--muted); }
+.empty { padding: 1rem; text-align: center; color: var(--muted); border: 1px dashed var(--border); border-radius: 6px; }
+footer.tool-footer {
+  margin-top: 1.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
+}
+footer.tool-footer code { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>esops-doctor fleet scan</h1>
+  <p class="meta">
+    {{.Fleet.ClustersTotal}} clusters · {{.Fleet.ClustersScanned}} scanned · {{.Fleet.ClustersUnreachable}} unreachable
+  </p>
+  <div class="counts">
+    {{if gt .Fleet.BySeverity.Critical 0}}<span class="pill critical">{{.Fleet.BySeverity.Critical}} critical</span>{{end}}
+    {{if gt .Fleet.BySeverity.Error 0}}<span class="pill error">{{.Fleet.BySeverity.Error}} error</span>{{end}}
+    {{if gt .Fleet.BySeverity.Warn 0}}<span class="pill warn">{{.Fleet.BySeverity.Warn}} warn</span>{{end}}
+    {{if gt .Fleet.BySeverity.Info 0}}<span class="pill info">{{.Fleet.BySeverity.Info}} info</span>{{end}}
+    <span class="pill pass">{{.Fleet.Passed}} passed</span>
+    {{if gt .Fleet.Skipped 0}}<span class="pill skipped">{{.Fleet.Skipped}} skipped</span>{{end}}
+    {{if gt .Fleet.Waived 0}}<span class="pill skipped">{{.Fleet.Waived}} waived</span>{{end}}
+    {{if gt .Fleet.Errored 0}}<span class="pill errored">{{.Fleet.Errored}} errored</span>{{end}}
+  </div>
+</header>
+
+{{range .Clusters}}
+<section class="cluster-section">
+  <h2>{{.Label}}</h2>
+  {{if .ConnectError}}
+    <div class="connect-error">
+      <span class="label">connect failed ({{.ConnectErrorClass}}):</span>{{.ConnectError}}
+    </div>
+  {{else if .Document}}
+    <p class="cluster-meta">
+      {{if .Document.Cluster.Name}}<strong>{{.Document.Cluster.Name}}</strong> · {{end}}{{.Document.Cluster.Dialect}}{{if .Document.Cluster.Version}} {{.Document.Cluster.Version}}{{end}}{{if .Document.Cluster.Health}} · health {{.Document.Cluster.Health}}{{end}}{{if .Document.Cluster.NodeCount}} · {{.Document.Cluster.NodeCount}} nodes{{end}}
+      · {{.Document.Scan.RuleCount}} rules · {{.Document.Scan.DurationMs}} ms
+    </p>
+    <div class="counts">
+      {{if gt .Document.Summary.BySeverity.Critical 0}}<span class="pill critical">{{.Document.Summary.BySeverity.Critical}} critical</span>{{end}}
+      {{if gt .Document.Summary.BySeverity.Error 0}}<span class="pill error">{{.Document.Summary.BySeverity.Error}} error</span>{{end}}
+      {{if gt .Document.Summary.BySeverity.Warn 0}}<span class="pill warn">{{.Document.Summary.BySeverity.Warn}} warn</span>{{end}}
+      {{if gt .Document.Summary.BySeverity.Info 0}}<span class="pill info">{{.Document.Summary.BySeverity.Info}} info</span>{{end}}
+      <span class="pill pass">{{.Document.Summary.Passed}} passed</span>
+      {{if gt .Document.Summary.Skipped 0}}<span class="pill skipped">{{.Document.Summary.Skipped}} skipped</span>{{end}}
+      {{if gt .Document.Summary.Waived 0}}<span class="pill skipped">{{.Document.Summary.Waived}} waived</span>{{end}}
+      {{if gt .Document.Summary.Errored 0}}<span class="pill errored">{{.Document.Summary.Errored}} errored</span>{{end}}
+    </div>
+    {{if .Document.Results}}
+    <table>
+      <thead>
+        <tr><th>Status</th><th>Severity</th><th>Rule</th><th>Category</th><th>Message</th></tr>
+      </thead>
+      <tbody>
+        {{range .Document.Results}}
+        {{$displayStatus := displayStatus .}}
+        <tr>
+          <td class="status {{$displayStatus}}">{{$displayStatus}}</td>
+          <td class="sev {{.Severity}}">{{or .Severity "—"}}</td>
+          <td>{{or .Name .RuleID}}<br><small>{{.RuleID}}</small></td>
+          <td>{{or .Category "—"}}</td>
+          <td>{{if .Message}}{{.Message}}{{else if .SkipReason}}<em>{{.SkipReason}}</em>{{else if .Error}}<em>{{.Error}}</em>{{else}}—{{end}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <div class="empty">No per-rule results to show.</div>
+    {{end}}
+  {{end}}
+</section>
+{{end}}
+
+<footer class="tool-footer">
+  {{.Tool.Name}} <code>{{.Tool.Version}}</code>{{if .Tool.Commit}} · commit <code>{{.Tool.Commit}}</code>{{end}}{{if .Tool.EsopsModule}} · esops-go {{.Tool.EsopsModule}}{{end}}
+</footer>
+</div>
+</body>
+</html>
