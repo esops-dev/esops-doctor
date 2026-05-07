@@ -25,6 +25,8 @@ checks:
     remediation:
       command: Replace the catch-all "*" pattern with a specific prefix (e.g. "logs-*", "metrics-*") so the template only matches its intended indices
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/index-templates.html
+      esops_commands:
+        - esops index template
     tags: [hygiene, mappings]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]

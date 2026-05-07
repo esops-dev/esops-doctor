@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"time"
 
 	yaml "go.yaml.in/yaml/v3"
 
@@ -22,8 +23,21 @@ import (
 type FleetDocument struct {
 	SchemaVersion int          `json:"schema_version" yaml:"schema_version"`
 	Tool          Tool         `json:"tool" yaml:"tool"`
+	Scan          FleetScan    `json:"scan" yaml:"scan"`
 	Fleet         FleetSummary `json:"fleet" yaml:"fleet"`
 	Clusters      []FleetEntry `json:"clusters" yaml:"clusters"`
+}
+
+// FleetScan carries the wall-clock metadata for the entire fleet run.
+// StartedAt is the earliest per-cluster start (RFC3339 UTC) so a
+// downstream tailing reports has a stable chronological key; DurationMs
+// is the sum of per-cluster wall-clock durations because the scan
+// walks targets sequentially. Both fields elide cleanly when no
+// cluster filled in a Header (legacy callers building FleetDocument by
+// hand) so absent metadata renders empty rather than 1970-01-01.
+type FleetScan struct {
+	StartedAt  string `json:"started_at,omitempty" yaml:"started_at,omitempty"`
+	DurationMs int64  `json:"duration_ms" yaml:"duration_ms"`
 }
 
 // FleetEntry is one cluster's slot in the fleet document. When the
@@ -96,8 +110,16 @@ func buildFleetDocument(clusters []ClusterReport, opts Options) FleetDocument {
 		Fleet:    FleetSummary{ClustersTotal: len(clusters)},
 		Clusters: make([]FleetEntry, 0, len(clusters)),
 	}
+	var earliestStart time.Time
+	var totalDuration time.Duration
 	for _, c := range clusters {
 		entry := FleetEntry{Label: c.Label}
+		if !c.Header.StartedAt.IsZero() {
+			if earliestStart.IsZero() || c.Header.StartedAt.Before(earliestStart) {
+				earliestStart = c.Header.StartedAt
+			}
+		}
+		totalDuration += c.Header.Duration
 		if c.Errored() {
 			entry.ConnectError = c.ConnectError
 			entry.ConnectErrorClass = c.ConnectErrorClass
@@ -118,6 +140,10 @@ func buildFleetDocument(clusters []ClusterReport, opts Options) FleetDocument {
 		doc.Fleet.BySeverity.Warn += d.Summary.BySeverity.Warn
 		doc.Fleet.BySeverity.Info += d.Summary.BySeverity.Info
 		doc.Clusters = append(doc.Clusters, entry)
+	}
+	doc.Scan = FleetScan{
+		StartedAt:  formatStartedAt(earliestStart),
+		DurationMs: totalDuration.Milliseconds(),
 	}
 	return doc
 }

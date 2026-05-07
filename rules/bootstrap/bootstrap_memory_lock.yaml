@@ -23,6 +23,8 @@ checks:
     remediation:
       command: Set bootstrap.memory_lock=true in elasticsearch.yml/opensearch.yml and ensure the service unit raises LimitMEMLOCK=infinity
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-configuration-memory.html
+      esops_commands:
+        - esops ops nodes
     tags: [prod, performance, bootstrap]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]

@@ -23,6 +23,10 @@ checks:
     remediation:
       command: Free disk on the affected node, expand the underlying volume, or relocate shards via cluster.routing.allocation.exclude._name
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-cluster.html#disk-based-shard-allocation
+      esops_commands:
+        - esops ops nodes
+        - esops ops drain
+        - esops ops unblock
     tags: [prod, capacity]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]

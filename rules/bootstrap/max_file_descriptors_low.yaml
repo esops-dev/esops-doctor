@@ -23,6 +23,8 @@ checks:
     remediation:
       command: Raise the process file-descriptor ulimit (LimitNOFILE=65535 in the systemd unit, or /etc/security/limits.conf for non-systemd hosts) and restart the node
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/setting-system-settings.html
+      esops_commands:
+        - esops ops nodes
     tags: [prod, bootstrap]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]

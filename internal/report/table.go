@@ -71,6 +71,9 @@ func Table(w io.Writer, h Header, results []engine.RuleResult, opts TableOptions
 		if err := writeFindings(w, h.Dialect, results); err != nil {
 			return err
 		}
+		if err := writeEsopsHints(w, results); err != nil {
+			return err
+		}
 		if err := writeWaived(w, results); err != nil {
 			return err
 		}
@@ -225,6 +228,43 @@ func writeFindings(w io.Writer, dialect string, results []engine.RuleResult) err
 			sev = "?"
 		}
 		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", sev, f.RuleID, f.Category, oneLine(f.Message)); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
+// writeEsopsHints emits a per-finding list of suggested `esops`
+// subcommands for failures that carry them in their remediation. Active
+// waivers are excluded so a documented exception doesn't generate
+// remediation noise; expired waivers stay in because the failure is
+// live again.
+func writeEsopsHints(w io.Writer, results []engine.RuleResult) error {
+	type hint struct {
+		ruleID   string
+		commands []string
+	}
+	var hints []hint
+	for _, r := range results {
+		if r.Status != engine.RuleStatusFail || r.Finding == nil {
+			continue
+		}
+		if isActiveWaiver(r.Finding) {
+			continue
+		}
+		if cmds := r.Finding.Remediation.EsopsCommands; len(cmds) > 0 {
+			hints = append(hints, hint{ruleID: r.Finding.RuleID, commands: cmds})
+		}
+	}
+	if len(hints) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w, "\nesops remediation (%d):\n", len(hints)); err != nil {
+		return err
+	}
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	for _, h := range hints {
+		if _, err := fmt.Fprintf(tw, "  %s\t%s\n", h.ruleID, strings.Join(h.commands, "; ")); err != nil {
 			return err
 		}
 	}

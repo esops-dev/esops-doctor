@@ -40,6 +40,9 @@ checks:
     message: Heap size misconfigured on {{count}} nodes.
     remediation:
       command: Update JVM options and restart nodes
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/heap-size.html
+      esops_commands:                # optional: imperative `esops` commands that
+        - esops ops nodes            # surface the same data or apply the fix
     dialects: [elasticsearch, opensearch]
 ```
 
@@ -49,6 +52,7 @@ checks:
 - `condition` — CEL expression returning `bool`.
 - `count_expression` (optional) — CEL returning `int` for `{{count}}` in message.
 - `dialects` — at least one of `elasticsearch` or `opensearch`.
+- `remediation.esops_commands` (optional) — concrete `esops` subcommands surfaced alongside `command` and `doc_url`. Each entry must start with `esops `.
 
 ---
 

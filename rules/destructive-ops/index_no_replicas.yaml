@@ -33,6 +33,10 @@ checks:
     remediation:
       command: Set index.number_of_replicas to at least 1 on the affected indices, or apply a template that does so for future indices
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/index-modules.html#dynamic-index-settings
+      esops_commands:
+        - esops index list
+        - esops index settings
+        - esops index template
     tags: [prod, availability]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]

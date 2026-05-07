@@ -58,7 +58,33 @@ header .meta { color: var(--muted); margin: 0 0 1rem; font-size: 0.9rem; }
 .pill.info { background: var(--info); color: white; }
 .pill.pass { background: var(--pass); color: white; }
 .pill.errored { background: var(--error); color: white; }
-.cluster-section { margin-top: 2rem; padding-top: 1rem; border-top: 2px solid var(--border); }
+.cluster-section { margin-top: 2rem; padding-top: 1rem; border-top: 2px solid var(--border); scroll-margin-top: 1rem; }
+.toc {
+  margin: 1.5rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.toc h2 { margin: 0 0 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.toc ol { margin: 0; padding-left: 1.5rem; }
+.toc li { margin-bottom: 0.3rem; }
+.toc a { color: var(--accent); text-decoration: none; font-weight: 600; }
+.toc a:hover { text-decoration: underline; }
+.toc-tag {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  margin-left: 0.3rem;
+  font-size: 0.72rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+}
+.toc-tag.critical { color: var(--critical); border-color: var(--critical); }
+.toc-tag.error    { color: var(--error);    border-color: var(--error); }
+.toc-tag.warn     { color: var(--warn);     border-color: var(--warn); }
+.toc-tag.info     { color: var(--info);     border-color: var(--info); }
+.toc-tag.pass     { color: var(--pass);     border-color: var(--pass); }
+.toc-tag.errored  { color: var(--error);    border-color: var(--error); }
 .cluster-section h2 { margin: 0 0 0.25rem; font-size: 1.2rem; }
 .cluster-section .cluster-meta { color: var(--muted); font-size: 0.9rem; margin: 0 0 0.75rem; }
 .connect-error { padding: 1rem; border-radius: 6px; background: var(--error); color: white; }
@@ -75,6 +101,31 @@ td.status.skipped { color: var(--skipped); }
 td.status.errored { color: var(--error); font-weight: 600; }
 td.status.fail { color: var(--error); font-weight: 600; }
 td.status.waived { color: var(--muted); }
+.waiver-note    { display: block; margin-top: 0.3rem; font-size: 0.8em; color: var(--muted); font-style: italic; }
+.waiver-note.expired { color: var(--error); font-style: normal; font-weight: 600; }
+.remediation a { color: var(--accent); text-decoration: none; }
+.remediation a:hover { text-decoration: underline; }
+.remediation code {
+  display: block;
+  padding: 0.2rem 0.4rem;
+  background: var(--border);
+  border-radius: 3px;
+  font-size: 0.85em;
+  margin-bottom: 0.25rem;
+  word-break: break-word;
+}
+.esops-commands { margin-top: 0.35rem; }
+.esops-commands-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+.remediation code.esops {
+  border-left: 2px solid var(--accent);
+  padding-left: 0.5rem;
+}
 .empty { padding: 1rem; text-align: center; color: var(--muted); border: 1px dashed var(--border); border-radius: 6px; }
 footer.tool-footer {
   margin-top: 1.5rem;
@@ -92,7 +143,7 @@ footer.tool-footer code { font-family: ui-monospace, "SF Mono", Menlo, monospace
 <header>
   <h1>esops-doctor fleet scan</h1>
   <p class="meta">
-    {{.Fleet.ClustersTotal}} clusters · {{.Fleet.ClustersScanned}} scanned · {{.Fleet.ClustersUnreachable}} unreachable
+    {{.Fleet.ClustersTotal}} clusters · {{.Fleet.ClustersScanned}} scanned · {{.Fleet.ClustersUnreachable}} unreachable{{if .Scan.StartedAt}} · started {{.Scan.StartedAt}}{{end}}{{if gt .Scan.DurationMs 0}} · took {{.Scan.DurationMs}} ms{{end}}
   </p>
   <div class="counts">
     {{if gt .Fleet.BySeverity.Critical 0}}<span class="pill critical">{{.Fleet.BySeverity.Critical}} critical</span>{{end}}
@@ -106,9 +157,33 @@ footer.tool-footer code { font-family: ui-monospace, "SF Mono", Menlo, monospace
   </div>
 </header>
 
-{{range .Clusters}}
-<section class="cluster-section">
-  <h2>{{.Label}}</h2>
+{{if gt (len .Clusters) 1}}
+<nav class="toc" aria-label="Clusters in this report">
+  <h2>Clusters</h2>
+  <ol>
+    {{range $i, $c := .Clusters}}
+    <li>
+      <a href="#cluster-{{$i}}">{{or $c.Label "(unnamed)"}}</a>
+      {{if $c.ConnectError}}
+        <span class="toc-tag errored">unreachable</span>
+      {{else if $c.Document}}
+        {{with $c.Document.Summary}}
+          {{if gt .BySeverity.Critical 0}}<span class="toc-tag critical">{{.BySeverity.Critical}} crit</span>{{end}}
+          {{if gt .BySeverity.Error 0}}<span class="toc-tag error">{{.BySeverity.Error}} err</span>{{end}}
+          {{if gt .BySeverity.Warn 0}}<span class="toc-tag warn">{{.BySeverity.Warn}} warn</span>{{end}}
+          {{if gt .BySeverity.Info 0}}<span class="toc-tag info">{{.BySeverity.Info}} info</span>{{end}}
+          {{if and (eq .Failed 0) (eq .Errored 0)}}<span class="toc-tag pass">clean</span>{{end}}
+        {{end}}
+      {{end}}
+    </li>
+    {{end}}
+  </ol>
+</nav>
+{{end}}
+
+{{range $i, $c := .Clusters}}
+<section class="cluster-section" id="cluster-{{$i}}">
+  <h2>{{$c.Label}}</h2>
   {{if .ConnectError}}
     <div class="connect-error">
       <span class="label">connect failed ({{.ConnectErrorClass}}):</span>{{.ConnectError}}
@@ -116,7 +191,7 @@ footer.tool-footer code { font-family: ui-monospace, "SF Mono", Menlo, monospace
   {{else if .Document}}
     <p class="cluster-meta">
       {{if .Document.Cluster.Name}}<strong>{{.Document.Cluster.Name}}</strong> · {{end}}{{.Document.Cluster.Dialect}}{{if .Document.Cluster.Version}} {{.Document.Cluster.Version}}{{end}}{{if .Document.Cluster.Health}} · health {{.Document.Cluster.Health}}{{end}}{{if .Document.Cluster.NodeCount}} · {{.Document.Cluster.NodeCount}} nodes{{end}}
-      · {{.Document.Scan.RuleCount}} rules · {{.Document.Scan.DurationMs}} ms
+      · {{.Document.Scan.RuleCount}} rules · {{.Document.Scan.DurationMs}} ms{{if .Document.Scan.StartedAt}} · {{.Document.Scan.StartedAt}}{{end}}
     </p>
     <div class="counts">
       {{if gt .Document.Summary.BySeverity.Critical 0}}<span class="pill critical">{{.Document.Summary.BySeverity.Critical}} critical</span>{{end}}
@@ -131,7 +206,7 @@ footer.tool-footer code { font-family: ui-monospace, "SF Mono", Menlo, monospace
     {{if .Document.Results}}
     <table>
       <thead>
-        <tr><th>Status</th><th>Severity</th><th>Rule</th><th>Category</th><th>Message</th></tr>
+        <tr><th>Status</th><th>Severity</th><th>Rule</th><th>Category</th><th>Message</th><th>Remediation</th></tr>
       </thead>
       <tbody>
         {{range .Document.Results}}
@@ -141,7 +216,28 @@ footer.tool-footer code { font-family: ui-monospace, "SF Mono", Menlo, monospace
           <td class="sev {{.Severity}}">{{or .Severity "—"}}</td>
           <td>{{or .Name .RuleID}}<br><small>{{.RuleID}}</small></td>
           <td>{{or .Category "—"}}</td>
-          <td>{{if .Message}}{{.Message}}{{else if .SkipReason}}<em>{{.SkipReason}}</em>{{else if .Error}}<em>{{.Error}}</em>{{else}}—{{end}}</td>
+          <td>
+            {{if .Message}}{{.Message}}{{else if .SkipReason}}<em>{{.SkipReason}}</em>{{else if .Error}}<em>{{.Error}}</em>{{else}}—{{end}}
+            {{with .Suppression}}
+              {{if .Expired}}
+                <span class="waiver-note expired">waiver expired{{if .ExpiresAt}} on {{.ExpiresAt.Format "2006-01-02"}}{{end}}: {{.Justification}}</span>
+              {{else}}
+                <span class="waiver-note">waived{{if .ExpiresAt}} until {{.ExpiresAt.Format "2006-01-02"}}{{end}}: {{.Justification}}</span>
+              {{end}}
+            {{end}}
+          </td>
+          <td class="remediation">
+            {{if .Remediation}}
+              {{if .Remediation.Command}}<code>{{.Remediation.Command}}</code>{{end}}
+              {{if .Remediation.EsopsCommands}}
+                <div class="esops-commands">
+                  <div class="esops-commands-label">esops:</div>
+                  {{range .Remediation.EsopsCommands}}<code class="esops">{{.}}</code>{{end}}
+                </div>
+              {{end}}
+              {{if .Remediation.DocURL}}<a href="{{.Remediation.DocURL}}" rel="noopener noreferrer" target="_blank">docs</a>{{end}}
+            {{else}}—{{end}}
+          </td>
         </tr>
         {{end}}
       </tbody>
@@ -154,7 +250,7 @@ footer.tool-footer code { font-family: ui-monospace, "SF Mono", Menlo, monospace
 {{end}}
 
 <footer class="tool-footer">
-  {{.Tool.Name}} <code>{{.Tool.Version}}</code>{{if .Tool.Commit}} · commit <code>{{.Tool.Commit}}</code>{{end}}{{if .Tool.EsopsModule}} · esops-go {{.Tool.EsopsModule}}{{end}}
+  {{.Tool.Name}} <code>{{.Tool.Version}}</code>{{if .Tool.Commit}} · commit <code>{{.Tool.Commit}}</code>{{end}}{{if .Tool.EsopsModule}} · esops-go {{.Tool.EsopsModule}}{{end}}{{if .Scan.StartedAt}} · scan started {{.Scan.StartedAt}}{{end}}
 </footer>
 </div>
 </body>

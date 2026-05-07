@@ -17,6 +17,10 @@ checks:
     remediation:
       command: Run /_cluster/allocation/explain on the affected indices to identify why allocation cannot proceed
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-allocation-explain.html
+      esops_commands:
+        - esops ops allocation-explain
+        - esops ops shards
+        - esops ops health
     tags: [prod, availability]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]

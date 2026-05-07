@@ -23,12 +23,15 @@ type Finding struct {
 	Suppression *Suppression
 }
 
-// Remediation describes how to fix a finding. Where one applies,
-// Command is the concrete `esops` invocation that fixes the underlying
-// condition; DocURL points at upstream documentation.
+// Remediation describes how to fix a finding. Command is a free-text
+// instruction (often a curl invocation or a checklist), DocURL points
+// at upstream documentation, and EsopsCommands lists concrete `esops`
+// subcommands that surface the same data or apply a fix — these let an
+// operator triage a finding directly with the imperative tool.
 type Remediation struct {
-	Command string `yaml:"command" json:"command,omitempty"`
-	DocURL  string `yaml:"doc_url" json:"doc_url,omitempty"`
+	Command       string   `yaml:"command" json:"command,omitempty"`
+	DocURL        string   `yaml:"doc_url" json:"doc_url,omitempty"`
+	EsopsCommands []string `yaml:"esops_commands,omitempty" json:"esops_commands,omitempty"`
 }
 
 // Suppression is the waiver attached to a finding. Justification is

@@ -18,6 +18,8 @@ checks:
     remediation:
       command: Define an ISM policy that rolls over and deletes time-series indices on a schedule
       doc_url: https://opensearch.org/docs/latest/im-plugin/ism/index/
+      esops_commands:
+        - esops index ism
     tags: [prod, retention]
     dialects: [opensearch]
     affected_versions: ["1.x", "2.x", "3.x"]
