@@ -243,15 +243,15 @@ type explainRemediation struct {
 
 func toEntryFull(r rules.Rule) explainEntry {
 	return explainEntry{
-		ID:                r.ID,
-		Name:              r.Name,
-		Category:          r.Category,
-		Severity:          r.Severity.String(),
-		Description:       strings.TrimSpace(r.Description),
-		Probe:             r.Probe,
-		Condition:         strings.TrimSpace(r.Condition),
-		CountExpression:   strings.TrimSpace(r.CountExpression),
-		Message:           r.Message,
+		ID:              r.ID,
+		Name:            r.Name,
+		Category:        r.Category,
+		Severity:        r.Severity.String(),
+		Description:     strings.TrimSpace(r.Description),
+		Probe:           r.Probe,
+		Condition:       strings.TrimSpace(r.Condition),
+		CountExpression: strings.TrimSpace(r.CountExpression),
+		Message:         r.Message,
 		Remediation: explainRemediation{
 			Command:       r.Remediation.Command,
 			DocURL:        r.Remediation.DocURL,
