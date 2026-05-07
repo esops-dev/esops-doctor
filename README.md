@@ -2,11 +2,23 @@
 
 Read-only diagnostic linter for self-hosted Elasticsearch and OpenSearch clusters. Think `kube-bench` / `kube-score` but for ES/OS: *"Tell me what's wrong."*
 
-`esops-doctor` is the diagnostic counterpart to [`esops`].(https://github.com/esops-dev/esops-go), `esops` is imperative and may mutate, `esops-doctor` is declarative, opinionated and **never mutates**.
+[![CI](https://github.com/esops-dev/esops-doctor/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/esops-dev/esops-doctor/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/esops-dev/esops-doctor?include_prereleases&sort=semver)](https://github.com/esops-dev/esops-doctor/releases)
+[![License](https://img.shields.io/github/license/esops-dev/esops-doctor)](LICENSE)
 
-## Read-only by construction
+`esops-doctor` is the diagnostic counterpart to [`esops`](https://github.com/esops-dev/esops-go), `esops` is imperative and may mutate, `esops-doctor` is declarative, opinionated and **never mutates**.
 
-It is read-only based on the import graph, not due to review discipline. If CI detects any internal dependency referencing a mutating API within `esops-go/pkg/client` or directly importing an Elasticsearch / OpenSearch client managed by itself, then the build will fail. Ran `esops-doctor` on production through CI, sans protection tier ritual.
+**esops-doctor** gives you:
+- Read-only diagnostic scans for Elasticsearch & OpenSearch
+- 100% declarative rules written in CEL (no Go code needed)
+- Multiple output formats (table, SARIF, HTML, JUnit…)
+- Built-in profiles for prod/staging/dev/CI/CIS-bench
+- Zero telemetry — completely private by design
+
+## Read-only by design
+
+The client is read-only by design. This restriction is enforced through static analysis of the import graph rather than through manual code review processes.
+If the CI pipeline detects any internal dependency that references a mutating API within esops-go/pkg/client or that directly imports the Elasticsearch/OpenSearch client we manage, the build will fail.
 
 ## Installation
 
@@ -70,7 +82,9 @@ full flag surface — the help text is the canonical CLI reference.
 
 ## Output formats
 
-`table` (default), `json`, `yaml`, `sarif`, `junit`, `html`. Example of `html` report can be found on [docs/report.html](docs/report.html)
+`table` (default), `json`, `yaml`, `sarif`, `junit`, `html`. Example of `html` report:
+
+![HTML Report](docs/report.png "a title")
 
 Findings render to stdout; logs and progress render to stderr, so the report is always pipeable.
 
@@ -100,6 +114,9 @@ Drop custom rules in `~/.config/esops-doctor/rules.d/` or pass `--rules-dir PATH
 No telemetry from `esops-doctor`. No opt-in, no opt-out, no "crash reports only". There is no SDK sending back telemetry, no OpenTelemetry exporter embedded into the binary code, no check for updates. Every single network connection made by the binary is to the URLs pointing to your cluster.
 
 Probes will fetch metadata about the cluster - settings, mappings, templates, policies, health and stats, auditing metadata. They will not fetch the contents of any user documents. See [SECURITY.md](SECURITY.md).
+
+## Contributing
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [docs/](docs/) folder for rule authoring.
 
 ## License
 

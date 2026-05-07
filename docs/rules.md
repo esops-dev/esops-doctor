@@ -95,6 +95,38 @@ go test ./internal/engine/...
 go run ./cmd/esops-doctor --context <ctx> scan --rule-id <id>
 ```
 
+## Running only your own rules
+
+By default, `esops-doctor` layers rules in this order:
+
+**embedded core rules** → `--rules-dir PATH` → `~/.config/esops-doctor/rules.d/`
+
+To run **only** your own rules and skip the built-in catalog entirely, add `--no-embedded-rules`:
+
+```bash
+esops-doctor scan \
+  --context prod \
+  --rules-dir ./my-rules \
+  --no-embedded-rules
+```
+
+**When to use it**
+- Air-gapped or vendor-specific environments
+- CI pipelines that only want a custom rule set
+- Reproducing a report with an exact catalog
+
+**Related flags**
+
+| Flag                  | Purpose                                      |
+|-----------------------|----------------------------------------------|
+| `--rules-dir PATH`    | Load additional rules from a directory       |
+| `--no-embedded-rules` | Skip all built-in core rules                 |
+| `--rule-id ID`        | Run only the named rule(s)                   |
+| `--tags TAG`          | Run only rules with matching tags            |
+| `--skip-tags TAG`     | Skip rules with matching tags                |
+
+Profiles, waivers, and severity filters continue to work. Rule selectors that reference embedded rule IDs simply become no-ops when `--no-embedded-rules` is active.
+
 ---
 
 ## Missing data?
