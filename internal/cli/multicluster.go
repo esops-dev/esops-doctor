@@ -16,9 +16,9 @@ import (
 
 // runMultiClusterScan walks targets sequentially, runs the same engine
 // + waiver set against each, and emits one fleet-wide report. Sequential
-// is the deliberate first-release model (CLAUDE.md §17): parallel
-// fan-out introduces resource budgets and per-cluster output ordering
-// concerns better deferred until a real workload asks for them.
+// is the deliberate first-release model: parallel fan-out introduces
+// resource budgets and per-cluster output ordering concerns better
+// deferred until a real workload asks for them.
 //
 // Exit-code semantics, in priority order:
 //
