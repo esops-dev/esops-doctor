@@ -266,6 +266,31 @@ func TestHTMLSeverityRankInTemplate(t *testing.T) {
 	}
 }
 
+// TestHTMLEsopsCommandsRendered guards the remediation column's
+// imperative-command surface: when a finding ships an EsopsCommands
+// list, each command renders as its own <code> block under an "esops:"
+// label so a reviewer can copy the suggested invocation directly out
+// of the page.
+func TestHTMLEsopsCommandsRendered(t *testing.T) {
+	r := failResult("cluster_health_status", "hygiene", findings.SeverityWarn, "Cluster health is not green.")
+	r.Finding.Remediation.EsopsCommands = []string{"esops ops health", "esops ops shards"}
+	var buf bytes.Buffer
+	if err := HTML(&buf, sampleHeader(), []engine.RuleResult{r}, Options{}); err != nil {
+		t.Fatalf("HTML: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{
+		`class="esops-commands"`,
+		`>esops:</div>`,
+		`<code class="esops">esops ops health</code>`,
+		`<code class="esops">esops ops shards</code>`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("HTML missing %q\nfull output:\n%s", want, out)
+		}
+	}
+}
+
 // TestHTMLActiveWaiverShownAsWaivedRow guards the suppression rendering
 // path: the row's data-status flips to "waived" so the status filter
 // works, the waived count pill appears in the header, and the

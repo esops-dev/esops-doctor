@@ -137,6 +137,49 @@ func TestValidateRejectsBadDocURL(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsValidEsopsCommands(t *testing.T) {
+	r := validRule()
+	r.Remediation.EsopsCommands = []string{"esops ops health", "esops ops shards"}
+	cat := &Catalog{Rules: []Rule{r}}
+	if errs := cat.Validate(); len(errs) != 0 {
+		t.Errorf("unexpected errors with valid esops_commands: %v", errs)
+	}
+}
+
+func TestValidateRejectsEmptyEsopsCommand(t *testing.T) {
+	r := validRule()
+	r.Remediation.EsopsCommands = []string{"esops ops health", "  "}
+	cat := &Catalog{Rules: []Rule{r}}
+	errs := cat.Validate()
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Message, "esops_commands[1]") && strings.Contains(e.Message, "empty") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected empty-entry error for esops_commands[1]; got %v", errs)
+	}
+}
+
+func TestValidateRejectsEsopsCommandWithBadPrefix(t *testing.T) {
+	// Catches typos like "esop ops health" that would silently appear
+	// in remediation output otherwise.
+	r := validRule()
+	r.Remediation.EsopsCommands = []string{"esop ops health"}
+	cat := &Catalog{Rules: []Rule{r}}
+	errs := cat.Validate()
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e.Message, "esops_commands[0]") && strings.Contains(e.Message, "must start with") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected prefix error for esop ops health; got %v", errs)
+	}
+}
+
 func TestValidateDuplicateIDs(t *testing.T) {
 	r1 := validRule()
 	r1.Source = "first.yaml"

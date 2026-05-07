@@ -140,6 +140,18 @@ tbody tr.hidden { display: none; }
   margin-bottom: 0.25rem;
   word-break: break-word;
 }
+.esops-commands { margin-top: 0.35rem; }
+.esops-commands-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+.remediation code.esops {
+  border-left: 2px solid var(--accent);
+  padding-left: 0.5rem;
+}
 footer.tool-footer {
   margin-top: 1.5rem;
   padding-top: 0.75rem;
@@ -236,6 +248,12 @@ footer.tool-footer code { font-family: ui-monospace, "SF Mono", Menlo, monospace
       <td class="remediation">
         {{if .Remediation}}
           {{if .Remediation.Command}}<code>{{.Remediation.Command}}</code>{{end}}
+          {{if .Remediation.EsopsCommands}}
+            <div class="esops-commands">
+              <div class="esops-commands-label">esops:</div>
+              {{range .Remediation.EsopsCommands}}<code class="esops">{{.}}</code>{{end}}
+            </div>
+          {{end}}
           {{if .Remediation.DocURL}}<a href="{{.Remediation.DocURL}}" rel="noopener noreferrer" target="_blank">docs</a>{{end}}
         {{else}}—{{end}}
       </td>

@@ -221,7 +221,7 @@ func toResult(r engine.RuleResult) Result {
 		if r.Finding != nil {
 			out.Severity = r.Finding.Severity.String()
 			out.Message = r.Finding.Message
-			if rem := r.Finding.Remediation; rem.Command != "" || rem.DocURL != "" {
+			if rem := r.Finding.Remediation; rem.Command != "" || rem.DocURL != "" || len(rem.EsopsCommands) > 0 {
 				rcopy := rem
 				out.Remediation = &rcopy
 			}

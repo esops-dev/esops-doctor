@@ -62,6 +62,23 @@ func TestTableLinesUpFindingsAndSummary(t *testing.T) {
 	}
 }
 
+func TestTableSurfacesEsopsCommands(t *testing.T) {
+	r := failResult("cluster_health_status", "hygiene", findings.SeverityWarn, "Cluster health is not green.")
+	r.Finding.Remediation.EsopsCommands = []string{"esops ops health", "esops ops shards"}
+	results := []engine.RuleResult{r}
+	var buf bytes.Buffer
+	if err := Table(&buf, Header{Dialect: "elasticsearch"}, results, TableOptions{}); err != nil {
+		t.Fatalf("Table: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "esops remediation (1)") {
+		t.Errorf("expected esops remediation header; got %q", out)
+	}
+	if !strings.Contains(out, "esops ops health") || !strings.Contains(out, "esops ops shards") {
+		t.Errorf("expected suggested commands in output; got %q", out)
+	}
+}
+
 func TestTableSurfacesSkippedReasons(t *testing.T) {
 	// Skipped is reported (not silent) so an operator sees that a
 	// rule was inapplicable rather than absent.

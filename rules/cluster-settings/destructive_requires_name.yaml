@@ -29,6 +29,9 @@ checks:
     remediation:
       command: Set persistent action.destructive_requires_name to true via PUT /_cluster/settings
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-update-settings.html
+      esops_commands:
+        - esops ops settings get
+        - esops ops settings set
     tags: [prod, destructive_ops]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]

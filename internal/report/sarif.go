@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/esops-dev/esops-doctor/internal/engine"
 	"github.com/esops-dev/esops-doctor/internal/findings"
@@ -80,6 +81,7 @@ type sarifRule struct {
 	Name                 string             `json:"name,omitempty"`
 	ShortDescription     *sarifText         `json:"shortDescription,omitempty"`
 	FullDescription      *sarifText         `json:"fullDescription,omitempty"`
+	Help                 *sarifText         `json:"help,omitempty"`
 	HelpURI              string             `json:"helpUri,omitempty"`
 	DefaultConfiguration *sarifRuleDefaults `json:"defaultConfiguration,omitempty"`
 }
@@ -113,8 +115,16 @@ type sarifSuppression struct {
 	Justification string `json:"justification,omitempty"`
 }
 
+// sarifInvoc carries the per-run invocation block. SARIF lets a
+// consumer trace when the tool ran via startTimeUtc / endTimeUtc — both
+// optional, both RFC3339 with the canonical "Z" suffix. Filling them
+// in lets a triage flow correlate a finding back to the scan window;
+// omitting them when the caller didn't supply timing keeps the output
+// well-formed for the legacy hand-built test fixtures.
 type sarifInvoc struct {
-	ExecutionSuccessful bool `json:"executionSuccessful"`
+	ExecutionSuccessful bool   `json:"executionSuccessful"`
+	StartTimeUtc        string `json:"startTimeUtc,omitempty"`
+	EndTimeUtc          string `json:"endTimeUtc,omitempty"`
 }
 
 func buildSarif(h Header, results []engine.RuleResult, opts Options) sarifDoc {
@@ -130,7 +140,7 @@ func buildSarif(h Header, results []engine.RuleResult, opts Options) sarifDoc {
 				Rules:          rules,
 			}},
 			Results: []sarifResult{},
-			Invocs:  []sarifInvoc{{ExecutionSuccessful: !anyErrored(results)}},
+			Invocs:  []sarifInvoc{sarifInvocFromHeader(h, !anyErrored(results))},
 		}},
 	}
 	if opts.SummaryOnly {
@@ -169,6 +179,9 @@ func sarifRules(results []engine.RuleResult) ([]sarifRule, map[string]int) {
 		}
 		if r.Rule.Remediation.DocURL != "" {
 			rule.HelpURI = r.Rule.Remediation.DocURL
+		}
+		if cmds := r.Rule.Remediation.EsopsCommands; len(cmds) > 0 {
+			rule.Help = &sarifText{Text: "Suggested esops commands: " + strings.Join(cmds, "; ")}
 		}
 		if r.Rule.Severity != findings.SeverityUnknown {
 			rule.DefaultConfiguration = &sarifRuleDefaults{Level: sarifLevel(r.Rule.Severity)}
@@ -251,6 +264,24 @@ func sarifLevel(s findings.Severity) string {
 	default:
 		return "none"
 	}
+}
+
+// sarifInvocFromHeader builds an invocation block populated with the
+// scan's StartTimeUtc/EndTimeUtc when the caller filled in the
+// Header's StartedAt. SARIF wants RFC3339 with a literal "Z" suffix
+// (UTC offset = 0); time.RFC3339 with .UTC() satisfies that. Headers
+// without a StartedAt (legacy hand-built test data) leave both fields
+// empty so they elide cleanly.
+func sarifInvocFromHeader(h Header, success bool) sarifInvoc {
+	inv := sarifInvoc{ExecutionSuccessful: success}
+	if !h.StartedAt.IsZero() {
+		start := h.StartedAt.UTC()
+		inv.StartTimeUtc = start.Format(time.RFC3339)
+		if h.Duration > 0 {
+			inv.EndTimeUtc = start.Add(h.Duration).Format(time.RFC3339)
+		}
+	}
+	return inv
 }
 
 func anyErrored(results []engine.RuleResult) bool {

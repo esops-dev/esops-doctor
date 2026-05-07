@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/esops-dev/esops-doctor/internal/engine"
 	"github.com/esops-dev/esops-doctor/internal/findings"
@@ -115,7 +116,15 @@ func writeMultiTableHeader(w io.Writer, c ClusterReport, n, total int) error {
 func writeFleetSummary(w io.Writer, clusters []ClusterReport) error {
 	var total summary
 	errored := 0
+	var earliestStart time.Time
+	var totalDuration time.Duration
 	for _, c := range clusters {
+		if !c.Header.StartedAt.IsZero() {
+			if earliestStart.IsZero() || c.Header.StartedAt.Before(earliestStart) {
+				earliestStart = c.Header.StartedAt
+			}
+		}
+		totalDuration += c.Header.Duration
 		if c.Errored() {
 			errored++
 			continue
@@ -130,10 +139,18 @@ func writeFleetSummary(w io.Writer, clusters []ClusterReport) error {
 		total.errored += s.errored
 		total.waived += s.waived
 	}
-	_, err := fmt.Fprintf(w, "fleet: %d clusters, %d unreachable | %d critical, %d error, %d warn, %d info; %d passed, %d skipped, %d errored, %d waived\n",
-		len(clusters), errored,
-		total.critical, total.error, total.warn, total.info,
-		total.passed, total.skipped, total.errored, total.waived,
-	)
+	parts := []string{
+		fmt.Sprintf("fleet: %d clusters, %d unreachable", len(clusters), errored),
+		fmt.Sprintf("%d critical, %d error, %d warn, %d info; %d passed, %d skipped, %d errored, %d waived",
+			total.critical, total.error, total.warn, total.info,
+			total.passed, total.skipped, total.errored, total.waived),
+	}
+	if !earliestStart.IsZero() {
+		parts = append(parts, "started "+earliestStart.UTC().Format(time.RFC3339))
+	}
+	if totalDuration > 0 {
+		parts = append(parts, "took "+formatDuration(totalDuration))
+	}
+	_, err := fmt.Fprintf(w, "%s\n", strings.Join(parts, " | "))
 	return err
 }

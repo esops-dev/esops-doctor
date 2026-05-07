@@ -18,6 +18,8 @@ checks:
     remediation:
       command: Enable xpack.security on Elasticsearch (or install the security plugin on OpenSearch), configure realms/roles, and restart the cluster
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/secure-cluster.html
+      esops_commands:
+        - esops ops audit
     tags: [prod, security]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]

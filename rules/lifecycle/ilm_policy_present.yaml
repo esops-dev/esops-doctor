@@ -18,6 +18,8 @@ checks:
     remediation:
       command: Define a policy with `esops index ilm apply --policy <name>`
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/index-lifecycle-management.html
+      esops_commands:
+        - esops index ilm
     tags: [prod, retention]
     dialects: [elasticsearch]
     affected_versions: ["7.x", "8.x", "9.x"]

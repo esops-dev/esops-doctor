@@ -27,6 +27,8 @@ checks:
     remediation:
       command: Add three master-only nodes (node.roles=[master]) and remove the data role from the existing master-eligible nodes
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-node.html
+      esops_commands:
+        - esops ops nodes
     tags: [prod, availability]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]

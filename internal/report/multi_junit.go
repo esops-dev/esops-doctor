@@ -16,7 +16,9 @@ import (
 // inventing a new XML shape.
 func MultiJUnit(w io.Writer, clusters []ClusterReport, opts Options) error {
 	suites := junitTestSuites{Name: junitClassName}
+	var totalSeconds float64
 	for _, c := range clusters {
+		totalSeconds += c.Header.Duration.Seconds()
 		if c.Errored() {
 			suite := junitTestSuite{
 				Name:     fleetSuiteName(c),
@@ -49,7 +51,7 @@ func MultiJUnit(w io.Writer, clusters []ClusterReport, opts Options) error {
 		suites.Errors += suite.Errors
 		suites.Skipped += suite.Skipped
 	}
-	suites.Time = formatJUnitSeconds(0)
+	suites.Time = formatJUnitSeconds(totalSeconds)
 
 	if _, err := io.WriteString(w, xml.Header); err != nil {
 		return fmt.Errorf("writing junit header: %w", err)

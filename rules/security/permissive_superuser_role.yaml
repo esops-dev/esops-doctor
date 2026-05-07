@@ -33,6 +33,8 @@ checks:
     remediation:
       command: Replace the broad role with one scoped to the privileges and index patterns the use case actually needs
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/built-in-roles.html
+      esops_commands:
+        - esops ops audit
     tags: [prod, security]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]

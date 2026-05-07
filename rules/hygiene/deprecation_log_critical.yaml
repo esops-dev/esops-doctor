@@ -18,6 +18,8 @@ checks:
     remediation:
       command: Run `esops-doctor scan --rule-id deprecation_log_critical --output json` to see each issue, then follow the per-issue url field to resolve
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/migration-api-deprecation.html
+      esops_commands:
+        - esops ops deprecations
     tags: [hygiene, upgrade]
     dialects: [elasticsearch]
     affected_versions: ["7.x", "8.x", "9.x"]

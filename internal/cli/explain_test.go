@@ -136,6 +136,55 @@ func TestExplainTooManyArgsIsUsageError(t *testing.T) {
 	}
 }
 
+// TestExplainSurfacesEsopsCommands guards that explain --output text
+// prints any esops_commands defined on the rule under the Remediation
+// section, and that JSON consumers see the same field on the
+// remediation object. cluster_health_status is the canonical rule
+// shipping these in the embedded catalog.
+func TestExplainSurfacesEsopsCommands(t *testing.T) {
+	t.Run("text", func(t *testing.T) {
+		var stdout bytes.Buffer
+		root := newRoot()
+		root.Writer = &stdout
+		if err := root.Run(context.Background(), []string{
+			"esops-doctor", "explain", "cluster_health_status",
+		}); err != nil {
+			t.Fatalf("explain: %v", err)
+		}
+		out := stdout.String()
+		for _, want := range []string{
+			"esops_commands:",
+			"esops ops health",
+			"esops ops shards",
+		} {
+			if !strings.Contains(out, want) {
+				t.Errorf("explain text output missing %q\nfull output:\n%s", want, out)
+			}
+		}
+	})
+	t.Run("json", func(t *testing.T) {
+		var stdout bytes.Buffer
+		root := newRoot()
+		root.Writer = &stdout
+		if err := root.Run(context.Background(), []string{
+			"esops-doctor", "--output", "json", "explain", "cluster_health_status",
+		}); err != nil {
+			t.Fatalf("explain: %v", err)
+		}
+		var entry struct {
+			Remediation struct {
+				EsopsCommands []string `json:"esops_commands"`
+			} `json:"remediation"`
+		}
+		if err := json.Unmarshal(stdout.Bytes(), &entry); err != nil {
+			t.Fatalf("not valid json: %v\n%s", err, stdout.String())
+		}
+		if len(entry.Remediation.EsopsCommands) == 0 {
+			t.Errorf("remediation.esops_commands should be populated; got %v", entry.Remediation.EsopsCommands)
+		}
+	})
+}
+
 func TestExplainResolvesAlias(t *testing.T) {
 	// Build a rules-dir with a rule carrying a deprecated_alias and
 	// confirm explain ALIAS_NAME finds the canonical rule.

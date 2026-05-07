@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strings"
 
 	"github.com/esops-dev/esops-doctor/internal/findings"
 )
@@ -60,6 +61,7 @@ var (
 //   - dialects is non-empty and each entry is recognised
 //   - effort, when set, is one of the documented values
 //   - remediation.doc_url, when set, parses as a URL
+//   - remediation.esops_commands entries are non-empty and start with `esops `
 //   - id and alias namespaces are unique across the catalog
 //
 // What this layer does NOT check (deferred):
@@ -180,6 +182,18 @@ func validateRule(r Rule) []ValidationError {
 	if u := r.Remediation.DocURL; u != "" {
 		if _, err := url.Parse(u); err != nil {
 			add(fmt.Sprintf("invalid remediation doc_url: %s", err))
+		}
+	}
+	for i, cmd := range r.Remediation.EsopsCommands {
+		trimmed := strings.TrimSpace(cmd)
+		switch {
+		case trimmed == "":
+			add(fmt.Sprintf("remediation.esops_commands[%d] is empty", i))
+		case !strings.HasPrefix(trimmed, "esops "):
+			// Catches typos ("esop ops health") and stray prefixes
+			// ("$ esops ops health") before they ship to operators.
+			add(fmt.Sprintf("remediation.esops_commands[%d] %q must start with %q",
+				i, trimmed, "esops "))
 		}
 	}
 

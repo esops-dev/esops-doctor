@@ -19,6 +19,10 @@ checks:
     remediation:
       command: Bring the missing node back online or rejoin replacement capacity to the cluster so the delayed allocation can resume
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/delayed-allocation.html
+      esops_commands:
+        - esops ops nodes
+        - esops ops allocation-explain
+        - esops ops shards
     tags: [prod, availability]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]

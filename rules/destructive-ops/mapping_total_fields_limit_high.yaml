@@ -35,6 +35,9 @@ checks:
     remediation:
       command: Investigate the producer creating fields; consider a fixed mapping or runtime fields rather than expanding the limit
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-settings-limit.html
+      esops_commands:
+        - esops index settings
+        - esops index template
     tags: [destructive_ops, mappings]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]

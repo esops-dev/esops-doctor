@@ -33,6 +33,11 @@ checks:
     remediation:
       command: Roll over the index, increase the primary count via shrink/split, or attach an ILM/ISM policy that rolls over before this size is reached
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/size-your-shards.html
+      esops_commands:
+        - esops ops shards
+        - esops index list
+        - esops index rollover
+        - esops index shrink
     tags: [prod, performance]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]

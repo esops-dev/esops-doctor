@@ -29,6 +29,9 @@ checks:
     remediation:
       command: "Set `dynamic: strict` (or `false`) on the index template so future indices reject (or ignore) unknown fields, and run a reindex if the existing mapping needs the same posture"
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/dynamic.html
+      esops_commands:
+        - esops index template
+        - esops migrate reindex
     tags: [prod, mappings]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]

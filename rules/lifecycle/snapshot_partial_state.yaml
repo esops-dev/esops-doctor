@@ -25,6 +25,9 @@ checks:
     remediation:
       command: Prune the affected snapshots and re-run a clean schedule once the underlying cause (failed shards, version skew) is fixed
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/delete-snapshot-api.html
+      esops_commands:
+        - esops snapshot list
+        - esops snapshot prune
     tags: [prod, recoverability]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]

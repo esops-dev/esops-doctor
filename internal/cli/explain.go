@@ -181,13 +181,19 @@ func renderExplainText(w io.Writer, r rules.Rule, requested string) error {
 		b.WriteString("\n")
 	}
 
-	if r.Remediation.Command != "" || r.Remediation.DocURL != "" {
+	if r.Remediation.Command != "" || r.Remediation.DocURL != "" || len(r.Remediation.EsopsCommands) > 0 {
 		b.WriteString("\nRemediation:\n")
 		if r.Remediation.Command != "" {
 			fmt.Fprintf(&b, "  command: %s\n", r.Remediation.Command)
 		}
 		if r.Remediation.DocURL != "" {
 			fmt.Fprintf(&b, "  doc_url: %s\n", r.Remediation.DocURL)
+		}
+		if len(r.Remediation.EsopsCommands) > 0 {
+			b.WriteString("  esops_commands:\n")
+			for _, cmd := range r.Remediation.EsopsCommands {
+				fmt.Fprintf(&b, "    - %s\n", cmd)
+			}
 		}
 	}
 
@@ -230,8 +236,9 @@ type explainEntry struct {
 }
 
 type explainRemediation struct {
-	Command string `json:"command,omitempty" yaml:"command,omitempty"`
-	DocURL  string `json:"doc_url,omitempty" yaml:"doc_url,omitempty"`
+	Command       string   `json:"command,omitempty" yaml:"command,omitempty"`
+	DocURL        string   `json:"doc_url,omitempty" yaml:"doc_url,omitempty"`
+	EsopsCommands []string `json:"esops_commands,omitempty" yaml:"esops_commands,omitempty"`
 }
 
 func toEntryFull(r rules.Rule) explainEntry {
@@ -245,7 +252,11 @@ func toEntryFull(r rules.Rule) explainEntry {
 		Condition:         strings.TrimSpace(r.Condition),
 		CountExpression:   strings.TrimSpace(r.CountExpression),
 		Message:           r.Message,
-		Remediation:       explainRemediation{Command: r.Remediation.Command, DocURL: r.Remediation.DocURL},
+		Remediation: explainRemediation{
+			Command:       r.Remediation.Command,
+			DocURL:        r.Remediation.DocURL,
+			EsopsCommands: append([]string(nil), r.Remediation.EsopsCommands...),
+		},
 		Tags:              append([]string(nil), r.Tags...),
 		Dialects:          append([]string(nil), r.Dialects...),
 		AffectedVersions:  append([]string(nil), r.AffectedVersions...),

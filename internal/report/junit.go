@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/esops-dev/esops-doctor/internal/engine"
 )
@@ -142,10 +143,14 @@ func junitTestCases(results []engine.RuleResult, opts Options) []junitTestCase {
 					Message: "waived: " + r.Finding.Suppression.Justification,
 				}
 			case r.Finding != nil:
+				body := r.Finding.Message
+				if cmds := r.Finding.Remediation.EsopsCommands; len(cmds) > 0 {
+					body += "\nSuggested esops commands: " + strings.Join(cmds, "; ")
+				}
 				tc.Failure = &junitFailure{
 					Type:    r.Finding.Severity.String(),
 					Message: r.Finding.Message,
-					Body:    r.Finding.Message,
+					Body:    body,
 				}
 			default:
 				tc.Failure = &junitFailure{Message: r.RuleID}

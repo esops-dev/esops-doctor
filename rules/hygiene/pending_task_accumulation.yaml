@@ -26,6 +26,10 @@ checks:
     remediation:
       command: Check the master node's load, GC pauses, and the source field of each pending task to identify the bottleneck
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-pending.html
+      esops_commands:
+        - esops ops pending-tasks
+        - esops ops tasks list
+        - esops ops nodes
     tags: [hygiene, performance]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]

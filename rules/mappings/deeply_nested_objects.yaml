@@ -54,6 +54,9 @@ checks:
     remediation:
       command: Flatten the deeply-nested objects into named scalar fields, or move the structure into a child index referenced by id
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/mapping-settings-limit.html
+      esops_commands:
+        - esops index template
+        - esops migrate reindex
     tags: [prod, mappings]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
