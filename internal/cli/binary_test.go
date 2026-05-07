@@ -12,8 +12,8 @@ import (
 )
 
 // MaxStrippedBinarySize is the upper bound (in bytes) the release-shape
-// binary may exceed before the budget test fires. CLAUDE.md §11 calls
-// for ~35–45 MB stripped; the value here is generous because cel-go +
+// binary may exceed before the budget test fires. The headline target is
+// ~35–45 MB stripped; the value here is generous because cel-go +
 // protobuf + AWS SDK transitive costs mean a fresh dep bump can drift
 // the number by a few MB without anything misconfigured. The test's job
 // is to catch creep, not to police every kilobyte.
@@ -29,10 +29,10 @@ const MaxStrippedBinarySize = 75 * 1024 * 1024 // 75 MB
 // test is gated on -short so a developer running `go test -short ./...`
 // for a quick check skips the multi-second build.
 //
-// CLAUDE.md §11 documents the headline ~35–45 MB target. The current
-// budget here is wider because the release toolchain has not yet
-// run a dep audit; treat any growth past today's number as something
-// to investigate before merging.
+// The headline target is ~35–45 MB stripped. The current budget here
+// is wider because the release toolchain has not yet run a dep audit;
+// treat any growth past today's number as something to investigate
+// before merging.
 func TestBinaryBudget(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping binary build in short mode")

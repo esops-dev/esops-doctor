@@ -30,7 +30,11 @@ func newRoot() *cli.Command {
 			"for known anti-patterns, mis-configurations, and hygiene gaps, and\n" +
 			"reports findings with severities and remediation hints.\n\n" +
 			"It is read-only by construction: every cluster operation goes through\n" +
-			"the read-only capability surface of esops-go.",
+			"the read-only capability surface of esops-go. No telemetry of any\n" +
+			"kind — outbound connections go only to the cluster URLs you name.\n\n" +
+			"Configuration is loaded from the same file as esops\n" +
+			"(~/.config/esops/config.yaml or $ESOPS_CONFIG); see the README for the\n" +
+			"context shape and a CI gating recipe.",
 		// EnableShellCompletion lets the binary respond to
 		// --generate-shell-completion when sourced from the bundled
 		// scripts under completions/. Operators install the script
