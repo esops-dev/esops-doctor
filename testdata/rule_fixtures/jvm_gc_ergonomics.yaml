@@ -1,0 +1,92 @@
+rule: jvm_gc_ergonomics
+cases:
+  - name: G1 collector with default args passes
+    expect: pass
+    data:
+      - name: n1
+        gc_collectors:
+          - G1 Young Generation
+          - G1 Old Generation
+        jvm_input_arguments:
+          - -Xms8g
+          - -Xmx8g
+          - -XX:+UseG1GC
+
+  - name: empty cluster passes vacuously
+    expect: pass
+    data: []
+
+  - name: nodes that do not report jvm details pass
+    expect: pass
+    data:
+      - name: n1
+
+  - name: ConcurrentMarkSweep collector flags
+    expect: fail
+    data:
+      - name: n1
+        gc_collectors:
+          - ParNew
+          - ConcurrentMarkSweep
+        jvm_input_arguments:
+          - -Xms4g
+          - -Xmx4g
+
+  - name: explicit -XX:+UseConcMarkSweepGC argument flags
+    expect: fail
+    data:
+      - name: n1
+        gc_collectors:
+          - G1 Young Generation
+          - G1 Old Generation
+        jvm_input_arguments:
+          - -Xms8g
+          - -Xmx8g
+          - -XX:+UseConcMarkSweepGC
+
+  - name: manual MaxGCPauseMillis override flags
+    expect: fail
+    data:
+      - name: n1
+        gc_collectors:
+          - G1 Young Generation
+          - G1 Old Generation
+        jvm_input_arguments:
+          - -Xms8g
+          - -Xmx8g
+          - -XX:MaxGCPauseMillis=100
+
+  - name: G1HeapRegionSize override flags
+    expect: fail
+    data:
+      - name: n1
+        gc_collectors:
+          - G1 Young Generation
+          - G1 Old Generation
+        jvm_input_arguments:
+          - -Xms16g
+          - -Xmx16g
+          - -XX:G1HeapRegionSize=16m
+
+  - name: one bad node out of three flags
+    expect: fail
+    data:
+      - name: n1
+        gc_collectors:
+          - G1 Young Generation
+        jvm_input_arguments:
+          - -Xms8g
+          - -Xmx8g
+      - name: n2
+        gc_collectors:
+          - G1 Young Generation
+        jvm_input_arguments:
+          - -Xms8g
+          - -Xmx8g
+      - name: n3
+        gc_collectors:
+          - ParNew
+          - ConcurrentMarkSweep
+        jvm_input_arguments:
+          - -Xms8g
+          - -Xmx8g

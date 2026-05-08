@@ -172,6 +172,12 @@ func (f *fakeNodeBootstrapInspector) NodeBootstrap(context.Context) ([]types.Nod
 	return f.Result, nil
 }
 
+type fakeNodeSettingsInspector struct{ Result []types.NodeSettings }
+
+func (f *fakeNodeSettingsInspector) NodeSettings(context.Context) ([]types.NodeSettings, error) {
+	return f.Result, nil
+}
+
 type fakeClusterSettingsFullInspector struct{ Result types.ClusterSettingsFull }
 
 func (f *fakeClusterSettingsFullInspector) GetClusterSettingsFull(context.Context, bool) (types.ClusterSettingsFull, error) {
@@ -269,6 +275,7 @@ func fullClient() *client.Client {
 		PendingTasks:        &fakePendingTasksInspector{},
 		Deprecations:        &fakeDeprecationInspector{},
 		NodeBootstrap:       &fakeNodeBootstrapInspector{},
+		NodeSettings:        &fakeNodeSettingsInspector{},
 		ClusterSettingsAll:  &fakeClusterSettingsFullInspector{},
 		Allocation:          &fakeAllocationInspector{},
 		TransportTLS:        &fakeTransportTLSInspector{},

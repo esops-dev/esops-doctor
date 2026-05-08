@@ -1,0 +1,31 @@
+rule: default_cluster_name
+cases:
+  - name: deliberate cluster name passes
+    expect: pass
+    data:
+      cluster_name: prod-eu-search
+      status: green
+
+  - name: cluster name with environment prefix passes
+    expect: pass
+    data:
+      cluster_name: staging-logs-1
+      status: yellow
+
+  - name: default Elasticsearch cluster name flags
+    expect: fail
+    data:
+      cluster_name: elasticsearch
+      status: green
+
+  - name: default OpenSearch cluster name flags
+    expect: fail
+    data:
+      cluster_name: opensearch
+      status: green
+
+  - name: docker-image default flags
+    expect: fail
+    data:
+      cluster_name: docker-cluster
+      status: green

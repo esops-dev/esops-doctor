@@ -1,0 +1,36 @@
+checks:
+  - id: default_cluster_name
+    name: Cluster is running with the distribution's default cluster name
+    category: hygiene
+    severity: warn
+    description: >
+      Elasticsearch defaults cluster.name to "elasticsearch" and
+      OpenSearch defaults to "opensearch". Leaving the default in
+      place is the classic anti-pattern that lets two unrelated
+      clusters discover each other when their nodes share an L2
+      segment, and it strips the operator-facing log/metric stream
+      of the one identifier that distinguishes one cluster from
+      another. Set cluster.name to a deliberate, environment-scoped
+      value (prod-eu-1, staging-search, …) before the cluster grows
+      past a single node.
+    probe: cluster_health
+    condition: |
+      has(self.cluster_name) &&
+      self.cluster_name != 'elasticsearch' &&
+      self.cluster_name != 'opensearch' &&
+      self.cluster_name != 'docker-cluster'
+    count_expression: |
+      (has(self.cluster_name) &&
+       self.cluster_name != 'elasticsearch' &&
+       self.cluster_name != 'opensearch' &&
+       self.cluster_name != 'docker-cluster') ? 0 : 1
+    message: cluster.name is set to the distribution default; pick a deliberate value.
+    remediation:
+      command: Set cluster.name in elasticsearch.yml / opensearch.yml on every node and restart the cluster
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/important-settings.html#cluster-name
+      esops_commands:
+        - esops ops health
+    tags: [hygiene, anti-pattern, prod]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: low

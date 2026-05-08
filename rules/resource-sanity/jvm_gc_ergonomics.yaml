@@ -1,0 +1,77 @@
+checks:
+  - id: jvm_gc_ergonomics
+    name: JVM GC algorithm or arguments fight the cluster's heuristics
+    category: resource_sanity
+    severity: warn
+    description: >
+      Two patterns this rule flags. (1) A node still running the
+      Concurrent Mark Sweep collector (gc_collectors contains
+      "ConcurrentMarkSweep" or "ParNew"). CMS was deprecated in
+      JDK 9, removed in JDK 14, and both Elasticsearch 8+ and
+      OpenSearch 2+ default to G1GC out of the box — a node still
+      on CMS is on a JDK old enough to be a security and a
+      stability risk. (2) A node whose jvm_input_arguments override
+      G1's pause-target heuristics (-XX:MaxGCPauseMillis,
+      -XX:G1HeapRegionSize, -XX:InitiatingHeapOccupancyPercent) with
+      manual values. The cluster's defaults are tuned against the
+      actual heap and shard counts the operator has; an override
+      that beat the defaults a release ago typically loses ground
+      with each JVM update. Surface the overrides so the operator
+      either documents the workload that demands them or removes
+      them.
+    probe: node_bootstrap
+    condition: |
+      size(self) == 0 ||
+      self.all(n,
+        (
+          !has(n.gc_collectors) ||
+          !n.gc_collectors.exists(gc,
+            gc.contains('ConcurrentMarkSweep') ||
+            gc.contains('ParNew') ||
+            gc == 'CMS'
+          )
+        ) &&
+        (
+          !has(n.jvm_input_arguments) ||
+          !n.jvm_input_arguments.exists(arg,
+            arg.startsWith('-XX:MaxGCPauseMillis') ||
+            arg.startsWith('-XX:G1HeapRegionSize') ||
+            arg.startsWith('-XX:InitiatingHeapOccupancyPercent') ||
+            arg.startsWith('-XX:+UseConcMarkSweepGC') ||
+            arg.startsWith('-XX:+UseParallelGC') ||
+            arg.startsWith('-XX:+UseSerialGC')
+          )
+        )
+      )
+    count_expression: |
+      size(self.filter(n,
+        (
+          has(n.gc_collectors) &&
+          n.gc_collectors.exists(gc,
+            gc.contains('ConcurrentMarkSweep') ||
+            gc.contains('ParNew') ||
+            gc == 'CMS'
+          )
+        ) ||
+        (
+          has(n.jvm_input_arguments) &&
+          n.jvm_input_arguments.exists(arg,
+            arg.startsWith('-XX:MaxGCPauseMillis') ||
+            arg.startsWith('-XX:G1HeapRegionSize') ||
+            arg.startsWith('-XX:InitiatingHeapOccupancyPercent') ||
+            arg.startsWith('-XX:+UseConcMarkSweepGC') ||
+            arg.startsWith('-XX:+UseParallelGC') ||
+            arg.startsWith('-XX:+UseSerialGC')
+          )
+        )
+      ))
+    message: '{{count}} node(s) running CMS, an alternate collector, or manually-tuned G1 heuristics that fight the cluster default.'
+    remediation:
+      command: Remove CMS / Parallel / Serial collector flags and any G1 pause-target / region-size overrides from jvm.options.d, then restart the affected nodes — the cluster default is G1GC with pause targets the runtime tunes itself
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/advanced-configuration.html#set-jvm-options
+      esops_commands:
+        - esops ops nodes
+    tags: [performance, resource]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

@@ -1,0 +1,38 @@
+checks:
+  - id: version_skew
+    name: Cluster nodes are not running the same version
+    category: hygiene
+    severity: error
+    description: >
+      A multi-node cluster that has more than one distinct version
+      string across its /_cat/nodes view is in the middle of a rolling
+      upgrade — or stuck in one. Running mixed versions for longer
+      than a deliberate rolling-restart window is unsupported by both
+      Elasticsearch and OpenSearch: the master refuses certain
+      operations, allocation decisions get conservative, and
+      deprecation handling diverges per-node. Surface the skew so the
+      operator either finishes the upgrade or rolls back. Single-node
+      clusters and nodes that do not report a version are skipped.
+    probe: nodes
+    condition: |
+      size(self) <= 1 ||
+      size(self.filter(n, has(n.version) && n.version != '')) <= 1 ||
+      self.filter(n, has(n.version) && n.version != '').all(n,
+        n.version == self.filter(m, has(m.version) && m.version != '')[0].version
+      )
+    count_expression: |
+      size(self.filter(n, has(n.version) && n.version != '')) <= 1 ? 0 :
+      size(self.filter(n,
+        has(n.version) && n.version != '' &&
+        n.version != self.filter(m, has(m.version) && m.version != '')[0].version
+      ))
+    message: '{{count}} node(s) running a version that does not match the rest of the cluster.'
+    remediation:
+      command: Complete the in-progress rolling upgrade, or roll back the divergent nodes — see /_cat/nodes for the per-node version
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/rolling-upgrades.html
+      esops_commands:
+        - esops ops nodes
+    tags: [hygiene, upgrade]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

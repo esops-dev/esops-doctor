@@ -1,0 +1,37 @@
+rule: node_store_allow_mmap
+cases:
+  - name: setting absent passes
+    expect: pass
+    data:
+      - name: n1
+        settings: {}
+
+  - name: explicit true passes
+    expect: pass
+    data:
+      - name: n1
+        settings:
+          "node.store.allow_mmap": "true"
+
+  - name: empty cluster passes vacuously
+    expect: pass
+    data: []
+
+  - name: explicit false flags
+    expect: fail
+    data:
+      - name: n1
+        settings:
+          "node.store.allow_mmap": "false"
+
+  - name: one bad node out of three flags
+    expect: fail
+    data:
+      - name: n1
+        settings: {}
+      - name: n2
+        settings:
+          "node.store.allow_mmap": "true"
+      - name: n3
+        settings:
+          "node.store.allow_mmap": "false"

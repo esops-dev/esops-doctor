@@ -37,6 +37,7 @@ const (
 	MappingFields        = "mapping_fields"
 	Mappings             = "mappings"
 	NodeBootstrap        = "node_bootstrap"
+	NodeSettings         = "node_settings"
 	NodeStats            = "node_stats"
 	Nodes                = "nodes"
 	PendingTasks         = "pending_tasks"
@@ -72,6 +73,7 @@ var known = map[string]struct{}{
 	MappingFields:        {},
 	Mappings:             {},
 	NodeBootstrap:        {},
+	NodeSettings:         {},
 	NodeStats:            {},
 	Nodes:                {},
 	PendingTasks:         {},
@@ -271,6 +273,11 @@ func (r *Registry) dispatch(ctx context.Context, name string) (any, error) {
 			return nil, notConfigured(name)
 		}
 		return fetchNodeBootstrap(ctx, cl.NodeBootstrap)
+	case NodeSettings:
+		if cl.NodeSettings == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchNodeSettings(ctx, cl.NodeSettings)
 	case ClusterSettingsFull:
 		if cl.ClusterSettingsAll == nil {
 			return nil, notConfigured(name)

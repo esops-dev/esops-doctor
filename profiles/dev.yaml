@@ -33,6 +33,14 @@ severity_overrides:
   deprecated_field_types: info
   unbounded_keyword_cardinality: info
   mapping_template_drift: info
+  default_cluster_name: info
+  version_skew: info
+  deprecation_log_warning: info
+  transient_settings_drift: info
+  network_host_wildcard: info
+  node_store_allow_mmap: info
+  suspect_discovery_settings: info
+  jvm_gc_ergonomics: info
 
 skip_tags:
   - prod-only

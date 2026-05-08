@@ -1,0 +1,30 @@
+checks:
+  - id: deprecation_log_warning
+    name: Warning-level deprecations reported by the cluster
+    category: hygiene
+    severity: warn
+    description: >
+      Issues at level "warning" from /_migration/deprecations describe
+      configuration the cluster will accept on the next major-version
+      upgrade but will remove in a future release. Companion to
+      deprecation_log_critical: critical entries block the next upgrade
+      outright, warning entries give the operator a runway to fix
+      things before they become critical. Surfacing the count here
+      lets the operator schedule the work — typically as part of the
+      same maintenance window as the upgrade itself.
+    probe: deprecation_log
+    condition: |
+      size(self) == 0 ||
+      self.all(d, !has(d.level) || d.level != 'warning')
+    count_expression: |
+      size(self.filter(d, has(d.level) && d.level == 'warning'))
+    message: '{{count}} warning-level deprecation(s) reported by /_migration/deprecations.'
+    remediation:
+      command: Run `esops-doctor scan --rule-id deprecation_log_warning --output json` to see each issue, then follow the per-issue url field to resolve
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/migration-api-deprecation.html
+      esops_commands:
+        - esops ops deprecations
+    tags: [hygiene, upgrade]
+    dialects: [elasticsearch]
+    affected_versions: ["7.x", "8.x", "9.x"]
+    effort: medium
