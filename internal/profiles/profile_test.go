@@ -1,6 +1,10 @@
 package profiles
 
 import (
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -171,4 +175,74 @@ func ruleIDs(c *rules.Catalog) []string {
 		out[i] = r.ID
 	}
 	return out
+}
+
+// TestLoadFileParsesProfileFromDisk — LoadFile reads a single YAML
+// file and returns the parsed Profile, populating Source with the
+// path. This is the operator-supplied custom-profile path used by
+// scan's --profile-file flag.
+func TestLoadFileParsesProfileFromDisk(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "custom.yaml")
+	body := []byte(`name: custom
+description: Operator-tuned scan profile.
+severity_overrides:
+  heap_size: critical
+include_tags:
+  - prod
+skip_tags: []
+rule_ids: []
+`)
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	prof, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	if prof.Name != "custom" {
+		t.Errorf("name = %q, want custom", prof.Name)
+	}
+	if prof.Source != path {
+		t.Errorf("source = %q, want %q", prof.Source, path)
+	}
+	if got := prof.SeverityOverrides["heap_size"]; got != findings.SeverityCritical {
+		t.Errorf("heap_size override = %s, want critical", got)
+	}
+	if len(prof.IncludeTags) != 1 || prof.IncludeTags[0] != "prod" {
+		t.Errorf("include_tags = %v, want [prod]", prof.IncludeTags)
+	}
+}
+
+// TestLoadFileMissingNameFallsBackToFileStem — a profile YAML with
+// no `name:` should still be self-identifying. LoadFile fills the
+// field from the file stem so log lines and error messages have
+// something concrete to print.
+func TestLoadFileMissingNameFallsBackToFileStem(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "fleet-prod.yaml")
+	if err := os.WriteFile(path, []byte("description: no name set"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	prof, err := LoadFile(path)
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+	if prof.Name != "fleet-prod" {
+		t.Errorf("name = %q, want fleet-prod (file-stem fallback)", prof.Name)
+	}
+}
+
+// TestLoadFileMissingPath — a missing file is a parse-time failure
+// the cli wraps as a usage error. The error must wrap fs.ErrNotExist
+// so the caller can switch on it via errors.Is rather than string
+// matching.
+func TestLoadFileMissingPath(t *testing.T) {
+	_, err := LoadFile("/no/such/profile.yaml")
+	if err == nil {
+		t.Fatal("expected error for missing profile path")
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("expected an error wrapping fs.ErrNotExist; got %v", err)
+	}
 }

@@ -124,5 +124,13 @@ func (c *Catalog) Append(other *Catalog) {
 		return
 	}
 	c.Rules = append(c.Rules, other.Rules...)
+	c.Sort()
+}
+
+// Sort orders Rules by ID. Stable, deterministic output is what
+// list-rules and validate-rules promise; callers that compose a
+// catalog (Append, the cli's mergeWithOverride) call this to restore
+// the invariant after mutating.
+func (c *Catalog) Sort() {
 	sort.Slice(c.Rules, func(i, j int) bool { return c.Rules[i].ID < c.Rules[j].ID })
 }

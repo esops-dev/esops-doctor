@@ -1,0 +1,29 @@
+rule: anonymous_access
+cases:
+  - name: security disabled passes (security_disabled owns it)
+    expect: pass
+    data:
+      status: { dialect: elasticsearch, enabled: false }
+
+  - name: security on, no anonymous block passes
+    expect: pass
+    data:
+      status: { dialect: elasticsearch, enabled: true }
+
+  - name: security on, anonymous explicitly disabled passes
+    expect: pass
+    data:
+      status: { dialect: elasticsearch, enabled: true }
+      anonymous:
+        enabled: false
+        source: default
+
+  - name: security on, anonymous enabled fails
+    expect: fail
+    data:
+      status: { dialect: elasticsearch, enabled: true }
+      anonymous:
+        enabled: true
+        username: _anonymous
+        roles: ["anonymous_role"]
+        source: persistent

@@ -99,37 +99,32 @@ go test ./internal/engine/...
 go run ./cmd/esops-doctor --context <ctx> scan --rule-id <id>
 ```
 
-## Running only your own rules
+## Layering and overrides
 
 By default, `esops-doctor` layers rules in this order:
 
 **embedded core rules** → `--rules-dir PATH` → `~/.config/esops-doctor/rules.d/`
 
-To run **only** your own rules and skip the built-in catalog entirely, add `--no-embedded-rules`:
+A rule in a later layer with the same `id` as an earlier one **shadows** the earlier rule. The embedded rule drops out before the catalog is validated, the operator-supplied rule survives, and an info-level log line names the file that did the override:
 
-```bash
-esops-doctor scan \
-  --context prod \
-  --rules-dir ./my-rules \
-  --no-embedded-rules
+```
+INFO doctor.catalog.rule_overridden rule_id=heap_size original=rules/resource-sanity/heap_size.yaml overridden_by=./my-rules/heap_size.yaml
 ```
 
-**When to use it**
-- Air-gapped or vendor-specific environments
-- CI pipelines that only want a custom rule set
-- Reproducing a report with an exact catalog
+This is how an operator tunes a baked-in rule (severity, threshold, message) without forking the binary: drop a copy of the rule into `--rules-dir` or `~/.config/esops-doctor/rules.d/` with whatever changes you need.
+
+Within a single layer, two rules with the same `id` are still a hard error — that's a typo, not an override.
 
 **Related flags**
 
-| Flag                  | Purpose                                      |
-|-----------------------|----------------------------------------------|
-| `--rules-dir PATH`    | Load additional rules from a directory       |
-| `--no-embedded-rules` | Skip all built-in core rules                 |
-| `--rule-id ID`        | Run only the named rule(s)                   |
-| `--tags TAG`          | Run only rules with matching tags            |
-| `--skip-tags TAG`     | Skip rules with matching tags                |
+| Flag                  | Purpose                                            |
+|-----------------------|----------------------------------------------------|
+| `--rules-dir PATH`    | Additional directory of rules layered after embedded |
+| `--rule-id ID`        | Run only the named rule(s)                         |
+| `--tags TAG`          | Run only rules with matching tags                  |
+| `--skip-tags TAG`     | Skip rules with matching tags                      |
 
-Profiles, waivers, and severity filters continue to work. Rule selectors that reference embedded rule IDs simply become no-ops when `--no-embedded-rules` is active.
+Profiles, waivers, and severity filters continue to work on top of overrides.
 
 ---
 

@@ -330,6 +330,12 @@ Aggregated `/_snapshot/*/*` across every registered repository. List of objects.
 | `role_mappings[]` | list |  |
 | `api_keys[]` | list | ES only — empty on OS |
 | `tenants[]` | list | OS only — empty on ES |
+| `realms[]` | list | Each realm: `name`, `type`, `order`, `enabled`, `deprecated` |
+| `anonymous.enabled` | bool | Effective: true when the cluster lets unauthenticated requests through |
+| `anonymous.username` | string | ES only; default `_anonymous` when enabled |
+| `anonymous.roles` | []string | Roles the anonymous identity inherits |
+| `anonymous.authz_exception` | bool | ES only; nil when unset |
+| `anonymous.source` | string | `transient` / `persistent` / `default` |
 
 `users[]` entry:
 
@@ -374,6 +380,109 @@ Aggregated `/_snapshot/*/*` across every registered repository. List of objects.
 |---|---|---|
 | `transport_tls_enabled` | bool |  |
 | `transport_tls_verified` | bool | Verification mode (ES) / hostname enforcement (OS) |
+
+## http_tls
+
+`/_nodes/settings` — cluster-side HTTP-layer TLS posture. **Single object.** Sibling of `transport_tls`; HTTP TLS protects every external client (esops, dashboards, application traffic), transport TLS protects node-to-node. `enabled` is true only when **every** node reports HTTP TLS on; `client_auth` is `"mixed"` when nodes disagree.
+
+| Field | Type | Notes |
+|---|---|---|
+| `enabled` | bool | True when every node has HTTP TLS on |
+| `client_auth` | string | `required` / `optional` / `none` / `mixed` |
+| `protocols` | []string | Union of accepted protocols across nodes |
+| `cipher_suites` | []string | Union of accepted suites across nodes |
+| `per_node` | []object | Per-node breakdown when nodes disagree |
+
+```cel
+has(self.enabled) && self.enabled == true
+```
+
+## audit_log
+
+`/_cluster/settings` filtered to audit keys (ES) or `/_plugins/_security/api/audit` (OS) — the cluster's own audit configuration. **Single object.** A cluster with audit just-enabled hasn't populated history yet; this probe carries config, not events (see `audit_warnings` for the tail).
+
+| Field | Type | Notes |
+|---|---|---|
+| `enabled` | bool | Whether audit logging is on |
+| `outputs` | []string | Sinks: `index`, `logfile` |
+| `events_include` | []string | Event types whitelisted |
+| `events_exclude` | []string | Event types blacklisted |
+| `ignore_users` | []string | Users excluded from audit |
+
+```cel
+has(self.enabled) && self.enabled == true
+```
+
+## audit_warnings
+
+`.security-audit-log-*` (ES) or `.opendistro-security-audit-log-*` (OS) — recent audit log entries normalised to a metadata-only row. **List of objects.** Probe-side window is 24h with a 1000-row cap; rules see the same slice within a scan.
+
+| Field | Type | Notes |
+|---|---|---|
+| `timestamp` | string | RFC3339 |
+| `layer` | string | `rest` / `transport` / `ip_filter` (lowercased) |
+| `type` | string | Event type: `authentication_failed`, `failed_login`, … (lowercased) |
+| `count` | int | Always 1 today; reserved for future bucket summarisation |
+
+```cel
+size(self) == 0
+```
+
+## realms
+
+`/_xpack/usage` + `/_cluster/settings` (ES) or `/_plugins/_security/api/securityconfig` (OS) — configured authentication realms. **List of objects.** OS callers without admin certs hit a 403 and the probe returns an error rather than an empty slice; the rule reports as Skipped/Error.
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | string |  |
+| `type` | string | `native`, `file`, `ldap`, `saml`, `oidc`, `kerberos`, `internal`, `noop`, … |
+| `order` | int | Cluster's evaluation order (lower wins) |
+| `enabled` | bool | Whether the realm is consulted |
+| `deprecated` | bool | True when the realm type is deprecated for the cluster's version |
+
+```cel
+self.all(r, !has(r.deprecated) || r.deprecated == false)
+```
+
+## api_keys
+
+`/_security/api_key?owner=false` — typed-time view of active API keys. **Elasticsearch only.** List of objects. Distinct from `security_audit.api_keys[]` (which uses string-typed Creation/Expiration for the audit table); this probe surfaces `age_days` derived at probe time so an age-based rule does not need a CEL `now`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | string |  |
+| `name` | string |  |
+| `username` | string |  |
+| `realm` | string |  |
+| `creation` | string | RFC3339 |
+| `expiration` | string | Optional |
+| `last_auth` | string | Optional; missing means "the cluster did not surface it" |
+| `invalidated` | bool |  |
+| `role_templates` | []string |  |
+| `age_days` | float | Derived; omitted when Creation is zero |
+
+```cel
+self.all(k, has(k.invalidated) && k.invalidated == true ||
+            !has(k.age_days) || k.age_days <= 365)
+```
+
+## service_tokens
+
+`/_security/service` — credentials for ES service accounts (Fleet, APM Server, …). **Elasticsearch only.** List of objects. `source` distinguishes index-stored tokens (mutable, `index`) from file-realm tokens (`file`); file-realm tokens carry a zero `creation` upstream and have no `age_days`.
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | string | Per-credential name |
+| `namespace` | string | e.g. `elastic` |
+| `service` | string | e.g. `fleet-server` |
+| `creation` | string | RFC3339 (omitted for file-realm tokens) |
+| `source` | string | `index` / `file` |
+| `age_days` | float | Derived; omitted when Creation is zero |
+
+```cel
+self.all(t, !has(t.source) || t.source != 'index' ||
+            !has(t.age_days) || t.age_days <= 365)
+```
 
 ## recovery
 

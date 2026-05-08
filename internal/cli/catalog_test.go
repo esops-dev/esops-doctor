@@ -11,6 +11,7 @@ import (
 	"github.com/esops-dev/esops-go/pkg/client"
 	"github.com/esops-dev/esops-go/pkg/types"
 
+	"github.com/esops-dev/esops-doctor/internal/findings"
 	"github.com/esops-dev/esops-doctor/internal/rules"
 )
 
@@ -284,4 +285,83 @@ type fakeClusterHealthInspector struct{ Result types.ClusterHealth }
 
 func (f *fakeClusterHealthInspector) Health(context.Context) (types.ClusterHealth, error) {
 	return f.Result, nil
+}
+
+// TestRulesDirOverridesEmbeddedRuleByID — drop a same-id rule with a
+// different severity into --rules-dir and confirm the embedded one is
+// shadowed. Scope is the catalog: the user's rule survives, the
+// embedded one drops out before the validator sees the catalog (so
+// the duplicate-id error does not fire).
+func TestRulesDirOverridesEmbeddedRuleByID(t *testing.T) {
+	dir := t.TempDir()
+	body := []byte(`checks:
+  - id: heap_size
+    name: Custom heap_size override
+    category: resource_sanity
+    severity: info
+    description: Operator-supplied override for heap_size.
+    probe: node_stats
+    condition: "true"
+    message: heap_size overridden
+    dialects: [elasticsearch, opensearch]
+`)
+	if err := os.WriteFile(filepath.Join(dir, "heap_size.yaml"), body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cat, err := loadLayeredCatalog(dir)
+	if err != nil {
+		t.Fatalf("loadLayeredCatalog: %v", err)
+	}
+	var seen int
+	var got rules.Rule
+	for _, r := range cat.Rules {
+		if r.ID == "heap_size" {
+			seen++
+			got = r
+		}
+	}
+	if seen != 1 {
+		t.Fatalf("expected heap_size to appear exactly once after override; got %d", seen)
+	}
+	if got.Severity != findings.SeverityInfo || got.Name != "Custom heap_size override" {
+		t.Errorf("expected operator-supplied heap_size; got name=%q severity=%s",
+			got.Name, got.Severity)
+	}
+}
+
+// TestRulesDirIntraLayerDuplicateStillErrors — within a single layer
+// (the operator's --rules-dir), two rules with the same ID is a typo,
+// not an override. The duplicate-id validator must still fire.
+func TestRulesDirIntraLayerDuplicateStillErrors(t *testing.T) {
+	dir := t.TempDir()
+	body := []byte(`checks:
+  - id: dup_within_layer
+    name: First copy
+    category: extras
+    severity: warn
+    description: First copy of an intra-layer duplicate.
+    probe: nodes
+    condition: "true"
+    message: m
+    dialects: [elasticsearch]
+  - id: dup_within_layer
+    name: Second copy
+    category: extras
+    severity: warn
+    description: Second copy of the same id in the same file.
+    probe: nodes
+    condition: "true"
+    message: m
+    dialects: [elasticsearch]
+`)
+	if err := os.WriteFile(filepath.Join(dir, "dup.yaml"), body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := loadLayeredCatalog(dir)
+	if err == nil {
+		t.Fatal("expected duplicate-id error from intra-layer duplicates")
+	}
+	if !strings.Contains(err.Error(), "duplicate id") {
+		t.Errorf("expected duplicate-id error; got %v", err)
+	}
 }

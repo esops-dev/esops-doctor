@@ -6,6 +6,8 @@ severity_overrides:
   tls_transport: error
   tls_insecure_skip_verify: error
   node_to_node_encryption: error
+  http_tls: error
+  anonymous_access: error
   security_disabled: error
   snapshot_repository_configured: error
   unassigned_shards: error
@@ -14,6 +16,10 @@ severity_overrides:
   destructive_requires_name: error
   permissive_superuser_role: warn
   dedicated_master_nodes: warn
+  audit_logging_enabled: warn
+  deprecated_realms: warn
+  stale_api_keys: warn
+  stale_service_tokens: warn
 
 skip_tags: []
 include_tags: []

@@ -6,6 +6,8 @@ severity_overrides:
   tls_transport: critical
   tls_insecure_skip_verify: critical
   node_to_node_encryption: critical
+  http_tls: critical
+  anonymous_access: critical
   security_disabled: critical
   snapshot_repository_configured: critical
   unassigned_shards: critical
@@ -16,6 +18,11 @@ severity_overrides:
   dedicated_master_nodes: error
   disk_watermarks: error
   max_file_descriptors_low: error
+  audit_logging_enabled: error
+  deprecated_realms: error
+  stale_api_keys: error
+  stale_service_tokens: error
+  recent_audit_warnings: warn
 
 skip_tags: []
 include_tags: []

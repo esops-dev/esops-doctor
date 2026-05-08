@@ -1,0 +1,18 @@
+rule: audit_logging_enabled
+cases:
+  - name: audit enabled passes
+    expect: pass
+    data:
+      enabled: true
+      outputs: ["index", "logfile"]
+      events_include: ["access_denied", "authentication_failed"]
+
+  - name: audit disabled fails
+    expect: fail
+    data:
+      enabled: false
+
+  - name: missing enabled field fails
+    expect: fail
+    data:
+      outputs: []

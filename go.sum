@@ -70,8 +70,8 @@ github.com/elastic/elastic-transport-go/v8 v8.11.0 h1:taYmqC2M6+fZt/+W+ENYh/W5L9
 github.com/elastic/elastic-transport-go/v8 v8.11.0/go.mod h1:DZQ0szCNywc9F+C9l/Kkd4n69SvJVj0I3yK1Of7s3l8=
 github.com/elastic/go-elasticsearch/v9 v9.4.0 h1:xtJaVhyjHJTeC4OPU6QgcUByXENtsAYF7FUGuR47b9k=
 github.com/elastic/go-elasticsearch/v9 v9.4.0/go.mod h1:IKW8WkW++PW8If95XqfMffGjoFrzHCpsKmWgYk5j3fQ=
-github.com/esops-dev/esops-go v0.0.9 h1:XP8XlX46s/NtIffvPfaEhczbxcg1ZgsT6L+TBKKwHfY=
-github.com/esops-dev/esops-go v0.0.9/go.mod h1:BRnXI5tVuTw0jCSAl8pkw021g6mgip0TTKuaYIyEICo=
+github.com/esops-dev/esops-go v0.0.10 h1:0raGrDiiOATiqPYaAdSnMwNbA0+f2XN4f9VF1IPcT6o=
+github.com/esops-dev/esops-go v0.0.10/go.mod h1:BRnXI5tVuTw0jCSAl8pkw021g6mgip0TTKuaYIyEICo=
 github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/fsnotify/fsnotify v1.10.1 h1:b0/UzAf9yR5rhf3RPm9gf3ehBPpf0oZKIjtpKrx59Ho=

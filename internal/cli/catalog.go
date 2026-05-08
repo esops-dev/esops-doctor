@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/esops-dev/esops-doctor/internal/exit"
+	"github.com/esops-dev/esops-doctor/internal/logging"
 	"github.com/esops-dev/esops-doctor/internal/probes"
 	"github.com/esops-dev/esops-doctor/internal/rules"
 )
@@ -18,11 +19,11 @@ import (
 // validated as a whole. Loading order is embedded → --rules-dir →
 // user dir.
 //
-// Layering is implemented as catalog Append; the validator catches
-// duplicate IDs as a hard error so an operator who tried to "override"
-// a shipped rule sees the collision rather than silently shadowing it.
-// True override-by-ID semantics is a separate piece of work — the
-// milestone only requires honouring the directories.
+// Same-ID collisions across layers shadow the lower layer: a rule in
+// --rules-dir or the user rules.d with the same ID as an embedded rule
+// replaces the embedded rule and emits an info log naming the source
+// of the override. Within-layer duplicates remain a hard error — those
+// are typos, not overrides.
 //
 // Errors are wrapped with exit.Catalog so the binary maps to exit 21,
 // the documented "rule catalog error" code.
@@ -58,7 +59,7 @@ func assembleLayeredCatalog(rulesDir string) (*rules.Catalog, error) {
 		if err != nil {
 			return nil, exit.Catalog("%s", err)
 		}
-		cat.Append(extra)
+		cat = mergeWithOverride(cat, extra, rulesDir)
 	}
 	if userDir, ok := userRulesDir(); ok {
 		extra, err := loadUserRulesDir(userDir)
@@ -66,10 +67,57 @@ func assembleLayeredCatalog(rulesDir string) (*rules.Catalog, error) {
 			return nil, err
 		}
 		if extra != nil {
-			cat.Append(extra)
+			cat = mergeWithOverride(cat, extra, userDir)
 		}
 	}
 	return cat, nil
+}
+
+// mergeWithOverride layers extra over base: any rule in base whose ID
+// appears in extra is dropped (and logged as an override) before the
+// extra rules are appended. The result is sorted by ID for the same
+// determinism the loader produces.
+//
+// Within-layer duplicates inside extra are not deduplicated here — they
+// flow through to Catalog.Validate() which fires the duplicate-id error
+// the operator wants for typos. This split keeps the override path
+// clean (cross-layer = override, intra-layer = mistake) without making
+// the loader catalog-aware.
+//
+// source is the human-readable origin of extra ("--rules-dir <path>"
+// or the user dir path) so the info log names the file an operator
+// would edit to undo the override.
+func mergeWithOverride(base, extra *rules.Catalog, source string) *rules.Catalog {
+	if extra == nil || len(extra.Rules) == 0 {
+		return base
+	}
+	overrideIDs := make(map[string]string, len(extra.Rules))
+	for _, r := range extra.Rules {
+		if r.ID == "" {
+			continue
+		}
+		// First-seen wins for the source attribution; intra-layer
+		// duplicates are caught by Validate() so we don't need to be
+		// fancy here.
+		if _, exists := overrideIDs[r.ID]; !exists {
+			overrideIDs[r.ID] = r.Source
+		}
+	}
+	merged := &rules.Catalog{Rules: make([]rules.Rule, 0, len(base.Rules)+len(extra.Rules))}
+	for _, r := range base.Rules {
+		if newSrc, override := overrideIDs[r.ID]; override {
+			logging.Logger().Info("doctor.catalog.rule_overridden",
+				"rule_id", r.ID,
+				"original", r.Source,
+				"overridden_by", newSrc,
+				"layer", source)
+			continue
+		}
+		merged.Rules = append(merged.Rules, r)
+	}
+	merged.Rules = append(merged.Rules, extra.Rules...)
+	merged.Sort()
+	return merged
 }
 
 // loadUserRulesDir reads the user rules.d directory if it exists. A

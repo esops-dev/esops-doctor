@@ -1,0 +1,35 @@
+checks:
+  - id: stale_api_keys
+    name: Long-lived API keys
+    category: security
+    severity: warn
+    description: >
+      Flags active API keys older than 365 days. Long-lived keys
+      survive operator turnover, scope changes, and forgotten use
+      cases — even when an expiration is set (which the
+      api_keys_no_expiration rule already polices), a one-year-old
+      key is a stale credential by any reasonable rotation cadence.
+      The probe derives age_days at scan time so this rule stays
+      relative to "now"; keys with no surfaced creation timestamp
+      are skipped silently rather than guessed at.
+    probe: api_keys
+    condition: |
+      self.all(k,
+        (has(k.invalidated) && k.invalidated == true) ||
+        !has(k.age_days) || k.age_days <= 365
+      )
+    count_expression: |
+      size(self.filter(k,
+        (!has(k.invalidated) || k.invalidated == false) &&
+        has(k.age_days) && k.age_days > 365
+      ))
+    message: '{{count}} active API key(s) older than 365 days.'
+    remediation:
+      command: Rotate the affected API keys via the security API and invalidate the originals; consider scripting the rotation so it runs on a regular cadence
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/security-api-create-api-key.html
+      esops_commands:
+        - esops ops audit
+    tags: [prod, security]
+    dialects: [elasticsearch]
+    affected_versions: ["7.x", "8.x", "9.x"]
+    effort: medium

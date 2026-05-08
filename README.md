@@ -65,6 +65,8 @@ esops-doctor scan --profile prod --output sarif > findings.sarif
 esops-doctor scan --targets local-es,local-os --output html
 esops-doctor explain heap_size
 esops-doctor list-rules --tags security
+esops-doctor new-profile > my-profile.yaml
+esops-doctor scan --profile-file my-profile.yaml
 ```
 
 Run `esops-doctor --help` and `esops-doctor <command> --help` for the
@@ -107,7 +109,11 @@ Findings render to stdout; logs and progress render to stderr, so the report is 
 
 Rules are YAML, evaluated by [CEL](https://github.com/google/cel-spec). Adding a rule is a YAML change, not a Go change. See [docs/rules.md](docs/rules.md) for the authoring workflow and [docs/probes.md](docs/probes.md) for the data shape each probe exposes.
 
-Drop custom rules in `~/.config/esops-doctor/rules.d/` or pass `--rules-dir PATH` to layer them over the embedded catalog.
+Drop custom rules in `~/.config/esops-doctor/rules.d/` or pass `--rules-dir PATH` to layer them over the embedded catalog. A custom rule with the same `id` as an embedded one shadows the embedded rule, so tuning a baked-in rule's severity, threshold, or message is a one-file change rather than a fork.
+
+## Profiles, customised
+
+`esops-doctor new-profile > my-profile.yaml` generates a profile YAML on stdout listing every catalog rule as a commented-out severity override. Edit the file (uncomment what you want to tune, adjust severities or `include_tags` / `skip_tags` / `rule_ids`), then feed it back with `scan --profile-file my-profile.yaml`. Mutually exclusive with `--profile NAME`.
 
 ## Privacy and telemetry
 

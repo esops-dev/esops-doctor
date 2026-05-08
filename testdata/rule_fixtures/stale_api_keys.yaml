@@ -1,0 +1,46 @@
+rule: stale_api_keys
+cases:
+  - name: empty list passes
+    expect: pass
+    data: []
+
+  - name: young keys pass
+    expect: pass
+    data:
+      - id: AAA
+        name: ci
+        creation: "2026-04-01T00:00:00Z"
+        age_days: 37.0
+      - id: BBB
+        name: report-runner
+        creation: "2026-01-15T00:00:00Z"
+        age_days: 113.0
+
+  - name: invalidated old key passes
+    expect: pass
+    data:
+      - id: OLD
+        name: legacy
+        creation: "2023-01-01T00:00:00Z"
+        invalidated: true
+        age_days: 1224.0
+
+  - name: missing age_days passes
+    expect: pass
+    data:
+      - id: NOAGE
+        name: legacy
+        invalidated: false
+
+  - name: active old key fails
+    expect: fail
+    data:
+      - id: AAA
+        name: ci
+        creation: "2026-04-01T00:00:00Z"
+        age_days: 37.0
+      - id: ANCIENT
+        name: ad-hoc
+        creation: "2024-01-01T00:00:00Z"
+        invalidated: false
+        age_days: 858.5

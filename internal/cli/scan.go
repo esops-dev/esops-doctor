@@ -59,6 +59,10 @@ func scanCommand() *cli.Command {
 				Usage: "Named profile to apply: prod | staging | dev | ci | cis-bench | <embedded name>",
 			},
 			&cli.StringFlag{
+				Name:  "profile-file",
+				Usage: "Path to a custom profile YAML (mutually exclusive with --profile; see `esops-doctor new-profile` to scaffold)",
+			},
+			&cli.StringFlag{
 				Name:  "rules-dir",
 				Usage: "Additional directory of rule YAML files layered over the embedded catalog and the user rules.d",
 			},
@@ -393,8 +397,52 @@ func resolveTargetContext(cmd *cli.Command) (config.Context, error) {
 //     them the include_tags / rule_ids / skip_tags combo bit them.
 func applyProfile(cmd *cli.Command, cat *rules.Catalog) (*rules.Catalog, error) {
 	name := strings.TrimSpace(cmd.String("profile"))
-	if name == "" {
+	file := strings.TrimSpace(cmd.String("profile-file"))
+	if name != "" && file != "" {
+		return nil, exit.Usage("--profile and --profile-file are mutually exclusive")
+	}
+	if name == "" && file == "" {
 		return cat, nil
+	}
+
+	prof, err := resolveProfile(name, file)
+	if err != nil {
+		return nil, err
+	}
+	if unknown := prof.UnknownSeverityOverrides(cat); len(unknown) > 0 {
+		logging.Logger().Warn("doctor.scan.profile.unknown_severity_overrides",
+			"profile", prof.Name,
+			"source", prof.Source,
+			"rule_ids", unknown,
+			"hint", "fix the rule_id or remove the override; the entry is currently a no-op")
+	}
+	out := prof.Apply(cat)
+	logging.Logger().Info("doctor.scan.profile.applied",
+		"profile", prof.Name,
+		"source", prof.Source,
+		"rules_in", len(cat.Rules),
+		"rules_out", len(out.Rules))
+	if len(out.Rules) == 0 {
+		logging.Logger().Warn("doctor.scan.profile.zero_rules_selected",
+			"profile", prof.Name,
+			"hint", "check include_tags / rule_ids / skip_tags — no rule survives the filter")
+	}
+	return out, nil
+}
+
+// resolveProfile picks the profile from either the named --profile
+// (looked up in the embedded catalog) or --profile-file (loaded from
+// disk). Caller has already enforced mutual exclusion.
+func resolveProfile(name, file string) (*profiles.Profile, error) {
+	if file != "" {
+		prof, err := profiles.LoadFile(file)
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil, exit.Usage("%s", err.Error())
+			}
+			return nil, exit.Catalog("%s", err.Error())
+		}
+		return prof, nil
 	}
 	pcat, err := profiles.LoadEmbedded()
 	if err != nil {
@@ -404,23 +452,7 @@ func applyProfile(cmd *cli.Command, cat *rules.Catalog) (*rules.Catalog, error) 
 	if err != nil {
 		return nil, exit.Usage("%s", err.Error())
 	}
-	if unknown := prof.UnknownSeverityOverrides(cat); len(unknown) > 0 {
-		logging.Logger().Warn("doctor.scan.profile.unknown_severity_overrides",
-			"profile", prof.Name,
-			"rule_ids", unknown,
-			"hint", "fix the rule_id or remove the override; the entry is currently a no-op")
-	}
-	out := prof.Apply(cat)
-	logging.Logger().Info("doctor.scan.profile.applied",
-		"profile", prof.Name,
-		"rules_in", len(cat.Rules),
-		"rules_out", len(out.Rules))
-	if len(out.Rules) == 0 {
-		logging.Logger().Warn("doctor.scan.profile.zero_rules_selected",
-			"profile", prof.Name,
-			"hint", "check include_tags / rule_ids / skip_tags — no rule survives the filter")
-	}
-	return out, nil
+	return prof, nil
 }
 
 // aliasIndex builds a `deprecated_alias → canonical_id` map from the

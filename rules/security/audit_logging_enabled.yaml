@@ -1,0 +1,26 @@
+checks:
+  - id: audit_logging_enabled
+    name: Audit logging is disabled
+    category: security
+    severity: error
+    description: >
+      Audit logging records authentication, authorization, and access
+      events. With it off, a security incident has no evidence trail
+      and operators have no way to reconstruct who-did-what. ES
+      enables audit via xpack.security.audit.enabled; OS configures
+      it through the security plugin's audit settings.
+    probe: audit_log
+    condition: |
+      has(self.enabled) && self.enabled == true
+    count_expression: |
+      (has(self.enabled) && self.enabled == true) ? 0 : 1
+    message: Audit logging is disabled.
+    remediation:
+      command: Enable xpack.security.audit.enabled on Elasticsearch or configure the OpenSearch security plugin's audit settings, route to an index or logfile sink, and restart the cluster
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/enable-audit-logging.html
+      esops_commands:
+        - esops ops audit
+    tags: [prod, security, audit]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

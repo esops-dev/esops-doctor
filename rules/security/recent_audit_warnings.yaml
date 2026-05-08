@@ -1,0 +1,26 @@
+checks:
+  - id: recent_audit_warnings
+    name: Recent audit-log warnings present
+    category: security
+    severity: warn
+    description: >
+      Tails the audit log over the last 24 hours and flags non-empty
+      windows. The probe limits to 1000 rows so a chatty cluster does
+      not blow the rule's evaluation budget. Only metadata is surfaced
+      (timestamp, layer, type) — request bodies and document IDs the
+      audit log records are not exposed to the rule.
+    probe: audit_warnings
+    condition: |
+      size(self) == 0
+    count_expression: |
+      size(self)
+    message: '{{count}} audit-log warning(s) in the last 24 hours.'
+    remediation:
+      command: Triage recent audit warnings in the cluster's audit index or logfile sink and address the underlying authentication or authorization failures
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/audit-event-types.html
+      esops_commands:
+        - esops ops audit
+    tags: [prod, security, audit]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: low
