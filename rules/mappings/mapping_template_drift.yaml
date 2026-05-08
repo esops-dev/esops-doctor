@@ -1,0 +1,31 @@
+checks:
+  - id: mapping_template_drift
+    name: Live index drifted from its composable template
+    category: mappings
+    severity: warn
+    description: >
+      A live index whose top-level `dynamic` setting does not match
+      the v2 composable template that claims its name. Drift like this
+      is usually the trail of a hand-edited mapping that the next
+      rollover will silently undo, or — worse — a template whose
+      promise of `strict` ingest never made it past the first index
+      rollover. Surface the gap so the operator can either re-apply
+      the template (and reindex, if the live shape needs the same
+      stance) or update the template to reflect the live behaviour
+      they actually want.
+    probe: mapping_drift
+    condition: |
+      size(self) == 0
+    count_expression: |
+      size(self)
+    message: '{{count}} live index/indices drifted from their composable template''s dynamic setting.'
+    remediation:
+      command: Re-apply the composable template (`esops index template`) and reindex so the live mapping matches, or update the template to match the live behaviour you want
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/index-templates.html
+      esops_commands:
+        - esops index template
+        - esops migrate reindex
+    tags: [prod, mappings]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

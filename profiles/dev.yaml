@@ -27,6 +27,12 @@ severity_overrides:
   deprecated_realms: info
   stale_api_keys: info
   stale_service_tokens: info
+  untested_restore: info
+  snapshot_slo_age: info
+  retention_gap: info
+  deprecated_field_types: info
+  unbounded_keyword_cardinality: info
+  mapping_template_drift: info
 
 skip_tags:
   - prod-only

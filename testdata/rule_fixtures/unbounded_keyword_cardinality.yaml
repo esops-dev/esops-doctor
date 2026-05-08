@@ -1,0 +1,57 @@
+rule: unbounded_keyword_cardinality
+cases:
+  - name: empty field list passes
+    expect: pass
+    data: []
+
+  - name: keyword with ignore_above passes
+    expect: pass
+    data:
+      - index: logs-2024-09
+        path: user.id
+        type: keyword
+        has_ignore_above: true
+        ignore_above: 1024
+        is_system: false
+
+  - name: text field without ignore_above passes
+    expect: pass
+    data:
+      - index: logs-2024-09
+        path: message
+        type: text
+        has_ignore_above: false
+        is_system: false
+
+  - name: unbounded keyword in system index passes
+    expect: pass
+    data:
+      - index: .ds-fleet-actions-results-2024.09-000001
+        path: agent.id
+        type: keyword
+        has_ignore_above: false
+        is_system: true
+
+  - name: unbounded keyword in user index flags
+    expect: fail
+    data:
+      - index: events-2024
+        path: tags
+        type: keyword
+        has_ignore_above: false
+        is_system: false
+
+  - name: mixed - one unbounded keyword among modern types flags
+    expect: fail
+    data:
+      - index: logs-2024-09
+        path: user.id
+        type: keyword
+        has_ignore_above: true
+        ignore_above: 1024
+        is_system: false
+      - index: events-2024
+        path: stack_trace
+        type: keyword
+        has_ignore_above: false
+        is_system: false

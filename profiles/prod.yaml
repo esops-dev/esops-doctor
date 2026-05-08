@@ -23,6 +23,12 @@ severity_overrides:
   stale_api_keys: error
   stale_service_tokens: error
   recent_audit_warnings: warn
+  untested_restore: critical
+  snapshot_slo_age: critical
+  retention_gap: error
+  deprecated_field_types: error
+  unbounded_keyword_cardinality: warn
+  mapping_template_drift: warn
 
 skip_tags: []
 include_tags: []

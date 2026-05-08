@@ -1,0 +1,37 @@
+checks:
+  - id: snapshot_slo_age
+    name: Most recent successful snapshot is stale
+    category: lifecycle
+    severity: error
+    description: >
+      The most recent SUCCESS snapshot in a repository is older than
+      48 hours — past the point where "snapshots run nightly" can
+      still be true. snapshot_repository_configured tells you the
+      repo exists; snapshot_failed_state tells you the most recent
+      attempt didn't crash; this rule tells you the schedule is
+      actually producing fresh, restorable snapshots. Repositories
+      with zero SUCCESS snapshots are skipped — that's the
+      untested_restore rule's job.
+    probe: snapshot_recency
+    condition: |
+      size(self) == 0 ||
+      self.all(r,
+        !has(r.latest_success_age_hours) ||
+        r.latest_success_age_hours <= 48.0
+      )
+    count_expression: |
+      size(self.filter(r,
+        has(r.latest_success_age_hours) &&
+        r.latest_success_age_hours > 48.0
+      ))
+    message: '{{count}} repository/repositories have no SUCCESS snapshot in the last 48 hours.'
+    remediation:
+      command: Check the schedule (SLM on Elasticsearch, SM on OpenSearch) for the affected repository, fix the cause of the failures, and re-run
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/snapshot-lifecycle-management.html
+      esops_commands:
+        - esops snapshot list
+        - esops snapshot verify
+    tags: [prod, recoverability]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

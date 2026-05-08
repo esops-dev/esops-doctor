@@ -33,6 +33,8 @@ const (
 	Indices              = "indices"
 	IndexSettings        = "index_settings"
 	IndexTemplates       = "index_templates"
+	MappingDrift         = "mapping_drift"
+	MappingFields        = "mapping_fields"
 	Mappings             = "mappings"
 	NodeBootstrap        = "node_bootstrap"
 	NodeStats            = "node_stats"
@@ -42,6 +44,7 @@ const (
 	Recovery             = "recovery"
 	SecurityAudit        = "security_audit"
 	ServiceTokens        = "service_tokens"
+	SnapshotRecency      = "snapshot_recency"
 	SnapshotRepositories = "snapshot_repositories"
 	Snapshots            = "snapshots"
 	TransportTLS         = "transport_tls"
@@ -65,6 +68,8 @@ var known = map[string]struct{}{
 	Indices:              {},
 	IndexSettings:        {},
 	IndexTemplates:       {},
+	MappingDrift:         {},
+	MappingFields:        {},
 	Mappings:             {},
 	NodeBootstrap:        {},
 	NodeStats:            {},
@@ -74,6 +79,7 @@ var known = map[string]struct{}{
 	Recovery:             {},
 	SecurityAudit:        {},
 	ServiceTokens:        {},
+	SnapshotRecency:      {},
 	SnapshotRepositories: {},
 	Snapshots:            {},
 	TransportTLS:         {},
@@ -285,6 +291,21 @@ func (r *Registry) dispatch(ctx context.Context, name string) (any, error) {
 			return nil, notConfigured(name)
 		}
 		return fetchMappings(ctx, cl.Mappings)
+	case MappingFields:
+		if cl.Mappings == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchMappingFields(ctx, cl.Mappings)
+	case MappingDrift:
+		if cl.Mappings == nil || cl.IndexTemplateGet == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchMappingDrift(ctx, cl.Mappings, cl.IndexTemplateGet)
+	case SnapshotRecency:
+		if cl.Snapshot == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchSnapshotRecency(ctx, cl.Snapshot)
 	case HTTPTLS:
 		if cl.HTTPTLS == nil {
 			return nil, notConfigured(name)

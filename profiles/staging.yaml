@@ -20,6 +20,12 @@ severity_overrides:
   deprecated_realms: warn
   stale_api_keys: warn
   stale_service_tokens: warn
+  untested_restore: error
+  snapshot_slo_age: error
+  retention_gap: warn
+  deprecated_field_types: warn
+  unbounded_keyword_cardinality: info
+  mapping_template_drift: info
 
 skip_tags: []
 include_tags: []

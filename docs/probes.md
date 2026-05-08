@@ -216,6 +216,42 @@ self.all(idx, !has(idx.properties) || !idx.properties.exists(a,
     has(idx.properties[a].properties[b].properties))))
 ```
 
+## mapping_fields
+
+Flattened view of every typed leaf field across every index's mapping tree. CEL has no recursion, so this probe walks the nested `properties` (and `fields:` multi-field blocks) once in Go and emits one row per leaf — rules over field types or per-field attributes filter a flat list with regular comprehensions.
+
+| Field | Type | Notes |
+|---|---|---|
+| `index` | string | Index name the field lives in |
+| `path` | string | Dotted path from the root, e.g. `user.name.keyword` |
+| `type` | string | The field's `type` value (`keyword`, `text`, `string`, …) |
+| `has_ignore_above` | bool | True when the field declared an `ignore_above` cap |
+| `ignore_above` | int | Cap value when `has_ignore_above` |
+| `is_system` | bool | True for dot-prefixed indices — rules opt them out by default |
+
+```cel
+# Flag keyword fields with no ignore_above cap, system indices excluded
+self.all(f, f.is_system || f.type != 'keyword' || f.has_ignore_above)
+```
+
+## mapping_drift
+
+Cross-probe join of v2 composable templates and live index mappings: emits one row per (template, live-index) pair where the index's top-level `dynamic` setting differs from the template's. Pairing uses the longest matching `index_pattern` so a specific template wins over a catch-all.
+
+| Field | Type | Notes |
+|---|---|---|
+| `index` | string | Live index name |
+| `template` | string | Composable template name |
+| `template_dynamic` | string | The template's pinned `dynamic` setting |
+| `index_dynamic` | string | The live index's `dynamic` setting (cluster default `"true"` materialised when unset) |
+
+System (dot-prefixed) indices and templates that don't pin `dynamic` are filtered out client-side — a template with no opinion on `dynamic` cannot drift.
+
+```cel
+# A non-empty drift list is itself the failure signal
+size(self) == 0
+```
+
 ## aliases
 
 `/_cat/aliases` — one row per alias→index binding. List of objects.
@@ -280,6 +316,31 @@ Aggregated `/_snapshot/*/*` across every registered repository. List of objects.
 | `name` | string |  |
 | `type` | string | `fs` / `s3` / `gcs` / `azure` / … |
 | `settings` | map[string]any | Type-specific config (bucket, base_path, …) |
+
+## snapshot_recency
+
+Per-repository roll-up over the snapshot list: counts split by state, the chronologically newest snapshot's state, the latest-success age, and the largest gap between consecutive SUCCESS snapshots (including the gap from the most recent SUCCESS to "now" — catches an ongoing stretch of silence after one good snapshot).
+
+`now` is sampled once at probe time so all rules see a consistent instant.
+
+| Field | Type | Notes |
+|---|---|---|
+| `repository` | string |  |
+| `snapshot_count` | int | Total snapshots in the repo |
+| `success_count` | int |  |
+| `failed_count` | int |  |
+| `partial_count` | int | `PARTIAL` + `INCOMPATIBLE` |
+| `in_progress_count` | int | `IN_PROGRESS` + `STARTED` |
+| `most_recent_state` | string | State of the chronologically newest snapshot; absent when no snapshot has a `start_time_millis` |
+| `latest_success_age_hours` | float | Hours since the most recent SUCCESS; absent when zero successes carry timestamps |
+| `max_success_gap_hours` | float | Largest gap between consecutive SUCCESS snapshots, with the gap from the latest SUCCESS to "now" included; absent when fewer than one SUCCESS snapshot |
+
+Optional fields decode as missing keys; guard with `has(...)` before access.
+
+```cel
+# Flag repos whose most recent SUCCESS is older than 48h
+self.all(r, !has(r.latest_success_age_hours) || r.latest_success_age_hours <= 48.0)
+```
 
 ## ilm_state
 

@@ -1,0 +1,49 @@
+rule: snapshot_slo_age
+cases:
+  - name: empty repo list passes
+    expect: pass
+    data: []
+
+  - name: repo without latest_success_age_hours passes (covered by untested_restore)
+    expect: pass
+    data:
+      - repository: prod
+        snapshot_count: 0
+        success_count: 0
+
+  - name: fresh success passes
+    expect: pass
+    data:
+      - repository: prod
+        snapshot_count: 5
+        success_count: 5
+        latest_success_age_hours: 12.0
+        max_success_gap_hours: 24.0
+
+  - name: 48-hour boundary still passes
+    expect: pass
+    data:
+      - repository: prod
+        snapshot_count: 5
+        success_count: 5
+        latest_success_age_hours: 48.0
+
+  - name: stale success flags
+    expect: fail
+    data:
+      - repository: prod
+        snapshot_count: 5
+        success_count: 5
+        latest_success_age_hours: 72.5
+
+  - name: one fresh repo, one stale — still flags
+    expect: fail
+    data:
+      - repository: prod
+        snapshot_count: 5
+        success_count: 5
+        latest_success_age_hours: 12.0
+      - repository: archive
+        snapshot_count: 5
+        success_count: 5
+        latest_success_age_hours: 96.0

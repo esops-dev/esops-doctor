@@ -1,0 +1,25 @@
+rule: mapping_template_drift
+cases:
+  - name: no drift entries passes
+    expect: pass
+    data: []
+
+  - name: live index matches template flags nothing
+    expect: pass
+    data: []
+
+  - name: drift between template strict and live true flags
+    expect: fail
+    data:
+      - index: logs-2024-09
+        template: logs
+        template_dynamic: "strict"
+        index_dynamic: "true"
+
+  - name: drift between template false and live runtime flags
+    expect: fail
+    data:
+      - index: events-2024
+        template: events
+        template_dynamic: "false"
+        index_dynamic: "runtime"

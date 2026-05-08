@@ -1,0 +1,40 @@
+checks:
+  - id: unbounded_keyword_cardinality
+    name: Keyword field without ignore_above
+    category: mappings
+    severity: warn
+    description: >
+      A `keyword` field with no `ignore_above` set will index any
+      string the cluster receives, no matter how long. A single
+      runaway document (a 10KB stack-trace shoved into a
+      keyword-typed log field) can blow past Lucene's per-document
+      term-byte limit and reject the whole document, or silently push
+      the field's cardinality high enough to wreck aggregation
+      performance. The Elastic Common Schema default of 1024 is a
+      reasonable cap; this rule flags only fields that set no cap at
+      all. System indices (dot-prefixed) are excluded.
+    probe: mapping_fields
+    condition: |
+      size(self) == 0 ||
+      self.all(f,
+        f.is_system ||
+        f.type != 'keyword' ||
+        f.has_ignore_above
+      )
+    count_expression: |
+      size(self.filter(f,
+        !f.is_system &&
+        f.type == 'keyword' &&
+        !f.has_ignore_above
+      ))
+    message: '{{count}} keyword field(s) in non-system indices have no ignore_above cap.'
+    remediation:
+      command: Set `ignore_above` (1024 is the ECS default) on the keyword field in the index template, then reindex to apply the cap to the live data
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/ignore-above.html
+      esops_commands:
+        - esops index template
+        - esops migrate reindex
+    tags: [prod, mappings]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium
