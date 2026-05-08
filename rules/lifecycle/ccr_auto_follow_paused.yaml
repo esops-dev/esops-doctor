@@ -1,0 +1,30 @@
+checks:
+  - id: ccr_auto_follow_paused
+    name: Cross-cluster auto-follow pattern is paused
+    category: lifecycle
+    severity: warn
+    description: >
+      A paused auto-follow pattern (`active: false` in
+      `/_ccr/auto_follow`) means new leader-side indices matching the
+      pattern will not get a follower index created on the local
+      cluster — replication for the existing followers continues, but
+      the namespace stops widening. Maintenance windows commonly pause
+      a pattern deliberately and the rule's job is to make sure that
+      pause is intentional rather than a leftover from a paged-out
+      operator. CCR auto-follow is Elasticsearch-only; the rule
+      auto-skips on OpenSearch and on basic-licence Elasticsearch
+      clusters where `/_ccr/auto_follow` is unregistered.
+    probe: auto_follow_patterns
+    condition: |
+      size(self) == 0 ||
+      self.all(p, !has(p.active) || p.active)
+    count_expression: |
+      size(self.filter(p, has(p.active) && !p.active))
+    message: '{{count}} CCR auto-follow pattern(s) are paused.'
+    remediation:
+      command: Resume the pattern via POST /_ccr/auto_follow/{name}/resume once the maintenance is done; if the pattern is no longer needed, delete it instead so it stops appearing in scans
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/ccr-getting-started.html
+    tags: [prod, recoverability]
+    dialects: [elasticsearch]
+    affected_versions: ["7.x", "8.x", "9.x"]
+    effort: low

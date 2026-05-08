@@ -1,0 +1,87 @@
+rule: index_tier_no_eligible_node
+cases:
+  - name: empty cluster passes vacuously
+    expect: pass
+    data:
+      nodes: []
+      indices: []
+
+  - name: index without tier preference passes
+    expect: pass
+    data:
+      nodes:
+        - name: n1
+          roles: [master, data]
+          tiers: []
+      indices:
+        - name: logs-2024-09
+          preferred_tiers: []
+
+  - name: tier preference satisfied by a node passes
+    expect: pass
+    data:
+      nodes:
+        - name: hot-1
+          roles: [master, data_hot]
+          tiers: [data_hot]
+        - name: warm-1
+          roles: [data_warm]
+          tiers: [data_warm]
+      indices:
+        - name: logs-2024-09
+          preferred_tiers: [data_hot]
+
+  - name: comma-separated preference with one match passes
+    expect: pass
+    data:
+      nodes:
+        - name: warm-1
+          roles: [data_warm]
+          tiers: [data_warm]
+      indices:
+        - name: logs-2024-08
+          preferred_tiers: [data_hot, data_warm]
+
+  - name: system index without matching tier is exempt
+    expect: pass
+    data:
+      nodes:
+        - name: hot-1
+          roles: [data_hot]
+          tiers: [data_hot]
+      indices:
+        - name: .ds-logs-2024
+          preferred_tiers: [data_cold]
+
+  - name: tier preference no node provides flags
+    expect: fail
+    data:
+      nodes:
+        - name: hot-1
+          roles: [data_hot]
+          tiers: [data_hot]
+      indices:
+        - name: logs-2024-08
+          preferred_tiers: [data_cold]
+
+  - name: comma-separated preference all unavailable flags
+    expect: fail
+    data:
+      nodes:
+        - name: hot-1
+          roles: [data_hot]
+          tiers: [data_hot]
+      indices:
+        - name: logs-2024-07
+          preferred_tiers: [data_cold, data_frozen]
+
+  - name: legacy data-only nodes with tier preference flags
+    expect: fail
+    data:
+      nodes:
+        - name: legacy-1
+          roles: [master, data]
+          tiers: []
+      indices:
+        - name: logs-2024-09
+          preferred_tiers: [data_hot]

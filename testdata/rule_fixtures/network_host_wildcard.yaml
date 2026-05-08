@@ -1,0 +1,59 @@
+rule: network_host_wildcard
+cases:
+  - name: pinned to a specific address passes
+    expect: pass
+    data:
+      - name: n1
+        settings:
+          "network.host": "10.0.1.4"
+
+  - name: _site_ alias passes
+    expect: pass
+    data:
+      - name: n1
+        settings:
+          "network.host": "_site_"
+
+  - name: setting absent passes
+    expect: pass
+    data:
+      - name: n1
+        settings: {}
+
+  - name: empty cluster passes vacuously
+    expect: pass
+    data: []
+
+  - name: 0.0.0.0 IPv4 wildcard flags
+    expect: fail
+    data:
+      - name: n1
+        settings:
+          "network.host": "0.0.0.0"
+
+  - name: '"::" IPv6 wildcard flags'
+    expect: fail
+    data:
+      - name: n1
+        settings:
+          "network.host": "::"
+
+  - name: full-form IPv6 wildcard flags
+    expect: fail
+    data:
+      - name: n1
+        settings:
+          "network.host": "0:0:0:0:0:0:0:0"
+
+  - name: one bad node out of three flags
+    expect: fail
+    data:
+      - name: n1
+        settings:
+          "network.host": "10.0.1.4"
+      - name: n2
+        settings:
+          "network.host": "10.0.1.5"
+      - name: n3
+        settings:
+          "network.host": "0.0.0.0"

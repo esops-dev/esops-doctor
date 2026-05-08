@@ -22,6 +22,10 @@ Numeric fields decode as `float64` after the JSON round-trip — convert with `i
   the rule as Skipped with reason "ILM is Elasticsearch-only".
 - `ism_state` is the OpenSearch counterpart, Skipped on Elasticsearch.
 - `deprecation_log` is Elasticsearch-only.
+- `follower_stats`, `auto_follow_patterns`, and `license` are
+  Elasticsearch-only. On OpenSearch the matching rule is Skipped;
+  on a basic-licence Elasticsearch cluster the CCR endpoints are
+  unregistered and Skipped surfaces with the same reason.
 
 A rule's `dialects:` field gates evaluation up-front, before the probe is even called. The dialect-specific Skipped reason above only fires when a rule lists both dialects but the cluster's adapter cannot serve the data.
 
@@ -606,6 +610,97 @@ self.all(t, !has(t.source) || t.source != 'index' ||
 
 ```cel
 self.all(d, !has(d.level) || d.level != 'critical')
+```
+
+## remote_clusters
+
+`/_remote/info` — one row per registered cross-cluster remote. List of objects. Available on both Elasticsearch and OpenSearch.
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | string | Remote cluster alias |
+| `mode` | string | `sniff` / `proxy` |
+| `connected` | bool | Live reachability flag |
+| `num_nodes_connected` | int | Sniff-mode node count or proxy-mode socket count |
+| `seed_hosts` | []string | Sniff-mode seeds (empty in proxy mode) |
+| `skip_unavailable` | bool | True iff CCS targeting this remote tolerates outages |
+
+```cel
+self.all(r, has(r.connected) && r.connected)
+```
+
+## follower_stats
+
+`/_ccr/stats` — one row per CCR follower index. **Elasticsearch only**, and unregistered on basic-licence clusters. List of objects.
+
+| Field | Type | Notes |
+|---|---|---|
+| `index` | string | Follower index name |
+| `leader_index` | string |  |
+| `leader_cluster` | string | Remote cluster alias |
+| `follower_lag_ops` | int | Ops the follower is behind the leader |
+| `last_read_failure` | string | Cluster's most recent read-error string; empty when healthy |
+| `paused` | bool | True iff replication is paused |
+
+```cel
+self.all(f, !has(f.paused) || !f.paused)
+```
+
+## auto_follow_patterns
+
+`/_ccr/auto_follow` — one row per configured auto-follow pattern. **Elasticsearch only**, basic-licence aware. List of objects.
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | string | Pattern name |
+| `remote_cluster` | string | Source remote alias |
+| `leader_index_patterns` | []string |  |
+| `follow_index_pattern` | string | Empty means the cluster default applies |
+| `active` | bool | False iff the pattern is paused |
+
+```cel
+self.all(p, !has(p.active) || p.active)
+```
+
+## tier_layout
+
+Cross-probe roll-up of `/_cat/nodes` (per-node `data_*` roles) and `<*>/_settings` (per-index `_tier_preference`). **Single object** with two list fields, used by rules that compare per-index tier requests against the live node fleet.
+
+| Field | Type | Notes |
+|---|---|---|
+| `nodes[].name` | string |  |
+| `nodes[].roles` | []string | All roles reported by `/_cat/nodes` |
+| `nodes[].tiers` | []string | Roles filtered to `data_*` (the data-tier subset) |
+| `indices[].name` | string |  |
+| `indices[].preferred_tiers` | []string | Comma-split `index.routing.allocation.include._tier_preference` |
+
+```cel
+self.indices.all(idx,
+  idx.preferred_tiers.exists(t,
+    self.nodes.exists(n, n.tiers.exists(nt, nt == t))
+  )
+)
+```
+
+## license
+
+`/_license` — single object describing the cluster's installed licence. **Elasticsearch only**; OpenSearch has no commercial-licence surface.
+
+| Field | Type | Notes |
+|---|---|---|
+| `status` | string | `active` / `expired` / `invalid` |
+| `type` | string | `basic` / `trial` / `gold` / `platinum` / `enterprise` |
+| `issued_to` | string |  |
+| `issuer` | string |  |
+| `uid` | string |  |
+| `max_nodes` | int | Zero when the licence is not node-bound |
+| `issued_at` | string | RFC3339 timestamp |
+| `expires_at` | string | RFC3339; absent for basic licences |
+| `days_to_expiry` | float64 | Pre-computed at probe time; absent for basic licences |
+
+```cel
+(!has(self.status) || self.status == 'active') &&
+(!has(self.days_to_expiry) || double(self.days_to_expiry) >= 30.0)
 ```
 
 ---

@@ -1,0 +1,63 @@
+checks:
+  - id: suspect_discovery_settings
+    name: Discovery settings look like a single-node misconfiguration
+    category: hygiene
+    severity: error
+    description: >
+      Two anti-patterns this rule flags. (1) discovery.type=single-node
+      on a node that is part of a multi-node cluster: the value disables
+      the cluster-formation handshake entirely and is meant for laptops
+      and CI containers; running it in prod produces a cluster that
+      will never re-form a master after a restart. (2) An empty
+      discovery.seed_hosts on a master-eligible node: with no seed
+      list the node falls back to localhost-only discovery, which works
+      on a single-node Docker image and silently breaks the moment a
+      second node is added. Either signal points at config that worked
+      on a developer's machine and got copied into prod unchanged.
+    probe: node_settings
+    condition: |
+      size(self) <= 1 ||
+      self.all(n,
+        !has(n.settings) ||
+        (
+          (
+            !('discovery.type' in n.settings) ||
+            string(n.settings['discovery.type']) != 'single-node'
+          ) &&
+          (
+            !('discovery.seed_hosts' in n.settings) ||
+            (
+              string(n.settings['discovery.seed_hosts']) != '' &&
+              string(n.settings['discovery.seed_hosts']) != '[]'
+            )
+          )
+        )
+      )
+    count_expression: |
+      size(self) <= 1 ? 0 :
+      size(self.filter(n,
+        has(n.settings) &&
+        (
+          (
+            ('discovery.type' in n.settings) &&
+            string(n.settings['discovery.type']) == 'single-node'
+          ) ||
+          (
+            ('discovery.seed_hosts' in n.settings) &&
+            (
+              string(n.settings['discovery.seed_hosts']) == '' ||
+              string(n.settings['discovery.seed_hosts']) == '[]'
+            )
+          )
+        )
+      ))
+    message: '{{count}} node(s) carry single-node-mode or empty-seed-list discovery settings on a multi-node cluster.'
+    remediation:
+      command: Remove discovery.type=single-node and populate discovery.seed_hosts with the master-eligible nodes' transport addresses, then restart the affected nodes
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-discovery-settings.html
+      esops_commands:
+        - esops ops nodes
+    tags: [hygiene, anti-pattern, prod]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: high

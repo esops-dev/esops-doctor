@@ -1,0 +1,56 @@
+rule: ccr_lease_expiring
+cases:
+  - name: no followers passes
+    expect: pass
+    data: []
+
+  - name: If the lease field is missing, the check passes automatically (older clusters don’t show this field at all).
+    expect: pass
+    data:
+      - index: follower-orders
+        leader_index: orders
+        leader_cluster: leader-eu
+        follower_lag_ops: 0
+        paused: false
+
+  - name: fresh lease passes
+    expect: pass
+    data:
+      - index: follower-orders
+        leader_index: orders
+        leader_cluster: leader-eu
+        follower_lag_ops: 0
+        paused: false
+        retention_lease_age_millis: 60000
+
+  - name: lease at 6-hour threshold passes
+    expect: pass
+    data:
+      - index: follower-orders
+        leader_index: orders
+        leader_cluster: leader-eu
+        follower_lag_ops: 0
+        paused: false
+        retention_lease_age_millis: 21600000
+
+  - name: lease over 6 hours flags
+    expect: fail
+    data:
+      - index: follower-orders
+        leader_index: orders
+        leader_cluster: leader-eu
+        follower_lag_ops: 0
+        paused: false
+        retention_lease_age_millis: 25200000
+
+  - name: one fresh plus one stale flags
+    expect: fail
+    data:
+      - index: follower-orders
+        leader_index: orders
+        leader_cluster: leader-eu
+        retention_lease_age_millis: 60000
+      - index: follower-events
+        leader_index: events
+        leader_cluster: leader-eu
+        retention_lease_age_millis: 36000000

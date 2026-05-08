@@ -23,30 +23,36 @@ const (
 	APIKeys              = "api_keys"
 	AuditLog             = "audit_log"
 	AuditWarnings        = "audit_warnings"
+	AutoFollowPatterns   = "auto_follow_patterns"
 	ClusterHealth        = "cluster_health"
 	ClusterSettings      = "cluster_settings"
 	ClusterSettingsFull  = "cluster_settings_full"
 	DeprecationLog       = "deprecation_log"
+	FollowerStats        = "follower_stats"
 	HTTPTLS              = "http_tls"
 	ILMState             = "ilm_state"
 	ISMState             = "ism_state"
 	Indices              = "indices"
 	IndexSettings        = "index_settings"
 	IndexTemplates       = "index_templates"
+	License              = "license"
 	MappingDrift         = "mapping_drift"
 	MappingFields        = "mapping_fields"
 	Mappings             = "mappings"
 	NodeBootstrap        = "node_bootstrap"
+	NodeSettings         = "node_settings"
 	NodeStats            = "node_stats"
 	Nodes                = "nodes"
 	PendingTasks         = "pending_tasks"
 	Realms               = "realms"
 	Recovery             = "recovery"
+	RemoteClusters       = "remote_clusters"
 	SecurityAudit        = "security_audit"
 	ServiceTokens        = "service_tokens"
 	SnapshotRecency      = "snapshot_recency"
 	SnapshotRepositories = "snapshot_repositories"
 	Snapshots            = "snapshots"
+	TierLayout           = "tier_layout"
 	TransportTLS         = "transport_tls"
 )
 
@@ -58,30 +64,36 @@ var known = map[string]struct{}{
 	APIKeys:              {},
 	AuditLog:             {},
 	AuditWarnings:        {},
+	AutoFollowPatterns:   {},
 	ClusterHealth:        {},
 	ClusterSettings:      {},
 	ClusterSettingsFull:  {},
 	DeprecationLog:       {},
+	FollowerStats:        {},
 	HTTPTLS:              {},
 	ILMState:             {},
 	ISMState:             {},
 	Indices:              {},
 	IndexSettings:        {},
 	IndexTemplates:       {},
+	License:              {},
 	MappingDrift:         {},
 	MappingFields:        {},
 	Mappings:             {},
 	NodeBootstrap:        {},
+	NodeSettings:         {},
 	NodeStats:            {},
 	Nodes:                {},
 	PendingTasks:         {},
 	Realms:               {},
 	Recovery:             {},
+	RemoteClusters:       {},
 	SecurityAudit:        {},
 	ServiceTokens:        {},
 	SnapshotRecency:      {},
 	SnapshotRepositories: {},
 	Snapshots:            {},
+	TierLayout:           {},
 	TransportTLS:         {},
 }
 
@@ -271,6 +283,11 @@ func (r *Registry) dispatch(ctx context.Context, name string) (any, error) {
 			return nil, notConfigured(name)
 		}
 		return fetchNodeBootstrap(ctx, cl.NodeBootstrap)
+	case NodeSettings:
+		if cl.NodeSettings == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchNodeSettings(ctx, cl.NodeSettings)
 	case ClusterSettingsFull:
 		if cl.ClusterSettingsAll == nil {
 			return nil, notConfigured(name)
@@ -336,6 +353,31 @@ func (r *Registry) dispatch(ctx context.Context, name string) (any, error) {
 			return nil, notConfigured(name)
 		}
 		return fetchServiceTokens(ctx, cl.ServiceTokens)
+	case RemoteClusters:
+		if cl.RemoteClusters == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchRemoteClusters(ctx, cl.RemoteClusters)
+	case FollowerStats:
+		if cl.RemoteClusters == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchFollowerStats(ctx, cl.RemoteClusters)
+	case AutoFollowPatterns:
+		if cl.RemoteClusters == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchAutoFollowPatterns(ctx, cl.RemoteClusters)
+	case License:
+		if cl.License == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchLicense(ctx, cl.License)
+	case TierLayout:
+		if cl.Nodes == nil || cl.IndexSettings == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchTierLayout(ctx, cl.Nodes, cl.IndexSettings)
 	default:
 		return nil, fmt.Errorf("%w: %s", engine.ErrProbeNotFound, name)
 	}

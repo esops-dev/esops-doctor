@@ -1,0 +1,49 @@
+checks:
+  - id: network_host_wildcard
+    name: network.host bound to a wildcard address
+    category: hygiene
+    severity: warn
+    description: >
+      A node configured with network.host=0.0.0.0 (or the IPv6
+      equivalent ::, or the special _site_:_local_ chain that
+      collapses to "every interface") publishes the cluster on every
+      interface the host owns. That's the right answer in a
+      single-tenant container with one network attached; in a prod
+      deployment with a management interface and a data-plane
+      interface it ships the cluster's HTTP and transport ports out
+      to anything that can route to the host. Pin network.host to a
+      specific address (or the well-known _site_ / _local_ aliases
+      with no fallback) so the cluster only listens where the
+      operator intended.
+    probe: node_settings
+    condition: |
+      size(self) == 0 ||
+      self.all(n,
+        !has(n.settings) ||
+        !('network.host' in n.settings) ||
+        (
+          string(n.settings['network.host']) != '0.0.0.0' &&
+          string(n.settings['network.host']) != '::' &&
+          string(n.settings['network.host']) != '0:0:0:0:0:0:0:0'
+        )
+      )
+    count_expression: |
+      size(self.filter(n,
+        has(n.settings) &&
+        ('network.host' in n.settings) &&
+        (
+          string(n.settings['network.host']) == '0.0.0.0' ||
+          string(n.settings['network.host']) == '::' ||
+          string(n.settings['network.host']) == '0:0:0:0:0:0:0:0'
+        )
+      ))
+    message: '{{count}} node(s) bind network.host to a wildcard address.'
+    remediation:
+      command: Pin network.host in elasticsearch.yml / opensearch.yml to a specific address (or _site_ / _local_) and restart the affected nodes
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-network.html
+      esops_commands:
+        - esops ops nodes
+    tags: [hygiene, anti-pattern, prod]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

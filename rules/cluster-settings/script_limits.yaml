@@ -29,7 +29,7 @@ checks:
       esops_commands:
         - esops ops settings get
         - esops ops settings set
-    tags: [prod, security]
+    tags: [prod, security, framework:cis, framework:soc2]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
     effort: medium

@@ -1,0 +1,58 @@
+rule: suspect_discovery_settings
+cases:
+  - name: single-node cluster passes (rule does not apply)
+    expect: pass
+    data:
+      - name: n1
+        settings:
+          "discovery.type": "single-node"
+
+  - name: multi-node cluster with proper seed list passes
+    expect: pass
+    data:
+      - name: n1
+        settings:
+          "discovery.seed_hosts": "n1:9300,n2:9300,n3:9300"
+      - name: n2
+        settings:
+          "discovery.seed_hosts": "n1:9300,n2:9300,n3:9300"
+      - name: n3
+        settings:
+          "discovery.seed_hosts": "n1:9300,n2:9300,n3:9300"
+
+  - name: multi-node cluster with no discovery.* settings passes
+    expect: pass
+    data:
+      - name: n1
+        settings: {}
+      - name: n2
+        settings: {}
+
+  - name: multi-node with discovery.type=single-node flags
+    expect: fail
+    data:
+      - name: n1
+        settings:
+          "discovery.type": "single-node"
+      - name: n2
+        settings: {}
+
+  - name: multi-node with empty seed list flags
+    expect: fail
+    data:
+      - name: n1
+        settings:
+          "discovery.seed_hosts": ""
+      - name: n2
+        settings:
+          "discovery.seed_hosts": "n1:9300,n2:9300"
+
+  - name: multi-node with literal "[]" seed list flags
+    expect: fail
+    data:
+      - name: n1
+        settings:
+          "discovery.seed_hosts": "[]"
+      - name: n2
+        settings:
+          "discovery.seed_hosts": "n1:9300,n2:9300"

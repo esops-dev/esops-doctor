@@ -1,0 +1,35 @@
+checks:
+  - id: transient_settings_drift
+    name: Cluster has transient settings that will vanish on a full restart
+    category: hygiene
+    severity: warn
+    description: >
+      Transient cluster settings live only in the in-memory cluster
+      state and are wiped on a full cluster restart, leaving the
+      cluster running with whatever the persistent scope (or the
+      built-in default) reports. That makes them a classic source of
+      silent regressions: an operator pushes a fix into the transient
+      scope during an incident, the cluster recovers, and three
+      months later a routine restart reverts the change with no audit
+      trail. Promote anything important into the persistent scope —
+      the only place a setting survives a restart. Newer Elasticsearch
+      releases reject writes to the transient scope outright; this
+      rule helps an operator clear the legacy state before that
+      happens.
+    probe: cluster_settings_full
+    condition: |
+      !has(self.transient) ||
+      size(self.transient) == 0
+    count_expression: |
+      has(self.transient) ? size(self.transient) : 0
+    message: '{{count}} transient cluster setting(s) will vanish on a full restart.'
+    remediation:
+      command: Promote each transient setting into the persistent scope (or remove it) — `esops ops settings set --scope persistent KEY VALUE`, then PUT null to the transient scope
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-update-settings.html
+      esops_commands:
+        - esops ops settings get
+        - esops ops settings set
+    tags: [hygiene, anti-pattern, prod]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: low

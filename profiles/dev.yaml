@@ -33,6 +33,25 @@ severity_overrides:
   deprecated_field_types: info
   unbounded_keyword_cardinality: info
   mapping_template_drift: info
+  default_cluster_name: info
+  version_skew: info
+  deprecation_log_warning: info
+  transient_settings_drift: info
+  network_host_wildcard: info
+  node_store_allow_mmap: info
+  suspect_discovery_settings: info
+  jvm_gc_ergonomics: info
+  circuit_breaker_limits: info
+  search_default_limits: info
+  index_max_result_window_high: info
+  remote_cluster_unreachable: info
+  ccr_follower_unhealthy: info
+  ccr_auto_follow_paused: info
+  index_tier_preference_invalid: info
+  index_tier_no_eligible_node: info
+  index_legacy_box_routing: info
+  ccr_lease_expiring: info
+  license_expiration: info
 
 skip_tags:
   - prod-only

@@ -1,0 +1,42 @@
+rule: remote_cluster_unreachable
+cases:
+  - name: no remotes configured passes
+    expect: pass
+    data: []
+
+  - name: every remote connected passes
+    expect: pass
+    data:
+      - name: leader-eu
+        mode: sniff
+        connected: true
+        num_nodes_connected: 3
+        skip_unavailable: false
+      - name: leader-us
+        mode: proxy
+        connected: true
+        num_nodes_connected: 1
+        skip_unavailable: false
+
+  - name: single remote disconnected flags
+    expect: fail
+    data:
+      - name: leader-eu
+        mode: sniff
+        connected: false
+        num_nodes_connected: 0
+        skip_unavailable: false
+
+  - name: one of two remotes disconnected flags
+    expect: fail
+    data:
+      - name: leader-eu
+        mode: sniff
+        connected: true
+        num_nodes_connected: 3
+        skip_unavailable: false
+      - name: leader-us
+        mode: proxy
+        connected: false
+        num_nodes_connected: 0
+        skip_unavailable: true

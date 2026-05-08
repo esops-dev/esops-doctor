@@ -115,11 +115,15 @@ Drop custom rules in `~/.config/esops-doctor/rules.d/` or pass `--rules-dir PATH
 
 `esops-doctor new-profile > my-profile.yaml` generates a profile YAML on stdout listing every catalog rule as a commented-out severity override. Edit the file (uncomment what you want to tune, adjust severities or `include_tags` / `skip_tags` / `rule_ids`), then feed it back with `scan --profile-file my-profile.yaml`. Mutually exclusive with `--profile NAME`.
 
-## Privacy and telemetry
+## Security
 
-No telemetry from `esops-doctor`. No opt-in, no opt-out, no "crash reports only". There is no SDK sending back telemetry, no OpenTelemetry exporter embedded into the binary code, no check for updates. Every single network connection made by the binary is to the URLs pointing to your cluster.
+Found a vulnerability? See [SECURITY.md](SECURITY.md). Please do not open public issues for security reports.
 
-Probes will fetch metadata about the cluster - settings, mappings, templates, policies, health and stats, auditing metadata. They will not fetch the contents of any user documents. See [SECURITY.md](SECURITY.md).
+## Non goals
+
+* No need for AI usage in the tool. Doesn't help this tool in any way;
+* No OpenTelemetry tooling/metrics will be enabled in this tool. This is a standalone tool and is not connected to anything else;
+* Probes will fetch metadata about the cluster: settings, mappings, templates, policies, health and stats, auditing metadata. They will not fetch the contents of any user documents. See [SECURITY.md](SECURITY.md).
 
 ## Contributing
 See [CONTRIBUTING.md](CONTRIBUTING.md) and the [docs/](docs/) folder for rule authoring.

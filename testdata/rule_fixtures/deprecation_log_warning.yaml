@@ -1,0 +1,43 @@
+rule: deprecation_log_warning
+cases:
+  - name: empty deprecation log passes
+    expect: pass
+    data: []
+
+  - name: only critical entries pass (covered by deprecation_log_critical)
+    expect: pass
+    data:
+      - category: cluster_settings
+        level: critical
+        message: setting X removed in 9
+        url: https://example.invalid/x
+
+  - name: info-level entry passes
+    expect: pass
+    data:
+      - category: index_settings
+        target: logs-2026-05
+        level: info
+        message: setting Y will change defaults in 10
+
+  - name: single warning-level entry flags
+    expect: fail
+    data:
+      - category: cluster_settings
+        level: warning
+        message: setting Z deprecated, replaced by Z2
+        url: https://example.invalid/z
+
+  - name: mixed levels flag the warning subset
+    expect: fail
+    data:
+      - category: cluster_settings
+        level: critical
+        message: hard-blocker
+      - category: node_settings
+        level: warning
+        message: soft-blocker
+      - category: index_settings
+        target: events
+        level: info
+        message: heads-up

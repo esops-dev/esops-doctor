@@ -1,0 +1,52 @@
+rule: ccr_follower_unhealthy
+cases:
+  - name: no followers passes
+    expect: pass
+    data: []
+
+  - name: every follower healthy passes
+    expect: pass
+    data:
+      - index: follower-orders
+        leader_index: orders
+        leader_cluster: leader-eu
+        follower_lag_ops: 0
+        paused: false
+      - index: follower-events
+        leader_index: events
+        leader_cluster: leader-eu
+        follower_lag_ops: 25
+        paused: false
+
+  - name: paused follower flags
+    expect: fail
+    data:
+      - index: follower-orders
+        leader_index: orders
+        leader_cluster: leader-eu
+        follower_lag_ops: 0
+        paused: true
+
+  - name: follower with read failure flags
+    expect: fail
+    data:
+      - index: follower-events
+        leader_index: events
+        leader_cluster: leader-eu
+        follower_lag_ops: 1024
+        last_read_failure: 'cluster_block_exception: blocked by no master'
+        paused: false
+
+  - name: one healthy plus one unhealthy flags
+    expect: fail
+    data:
+      - index: follower-orders
+        leader_index: orders
+        leader_cluster: leader-eu
+        follower_lag_ops: 0
+        paused: false
+      - index: follower-payments
+        leader_index: payments
+        leader_cluster: leader-us
+        follower_lag_ops: 0
+        paused: true

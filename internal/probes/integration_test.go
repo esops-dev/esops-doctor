@@ -60,14 +60,25 @@ var notApplicableOnES = map[string]bool{
 	ISMState:      true, // ISM is OpenSearch-only
 	APIKeys:       true, // Security disabled in the test container; upstream returns ErrUnsupported
 	ServiceTokens: true, // Same as api_keys — security off ⇒ unsupported
+	// FollowerStats / AutoFollowPatterns are CCR-licence-gated upstream
+	// (404 → ErrUnsupported), but the OSS-style ES test container
+	// answers /_ccr/* with an empty body and a 200, so the probes
+	// succeed with empty data rather than skipping. The doctor rules
+	// behind these probes treat the empty list as a vacuous pass —
+	// indistinguishable from "no CCR configured here" — so the
+	// integration sweep does not need a special case.
+	License: true, // /_license is unregistered on the licensing-stripped test build (404 → ErrUnsupported)
 }
 
 // notApplicableOnOS is the OS counterpart.
 var notApplicableOnOS = map[string]bool{
-	ILMState:       true, // ILM is Elasticsearch-only
-	DeprecationLog: true, // /_migration/deprecations is Elasticsearch-only
-	APIKeys:        true, // API keys are an Elasticsearch-only surface
-	ServiceTokens:  true, // Service tokens are an Elasticsearch-only surface
+	ILMState:           true, // ILM is Elasticsearch-only
+	DeprecationLog:     true, // /_migration/deprecations is Elasticsearch-only
+	APIKeys:            true, // API keys are an Elasticsearch-only surface
+	ServiceTokens:      true, // Service tokens are an Elasticsearch-only surface
+	FollowerStats:      true, // CCR is Elasticsearch-only — OS exposes a divergent /_plugins/_replication surface
+	AutoFollowPatterns: true, // CCR auto-follow is Elasticsearch-only on the same terms as FollowerStats
+	License:            true, // /_license is an Elasticsearch-only surface; OS has no commercial-licence model
 }
 
 // skippedOnOS lists probes the OS sweep does not exercise. The OS test

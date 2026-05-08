@@ -1,0 +1,35 @@
+checks:
+  - id: license_expiration
+    name: Elasticsearch licence is expired or expiring soon
+    category: security
+    severity: error
+    description: >
+      The cluster's licence drives feature availability — security,
+      machine learning, watcher, and CCR all degrade or disable when
+      the licence expires. The rule fires when the cluster reports a
+      non-active licence (already expired or invalid) or when the
+      installed licence is within 30 days of its expiry, giving an
+      operator enough lead time to run the renewal through whatever
+      procurement loop they need. The probe pre-computes
+      `days_to_expiry` so the condition stays trivial; basic licences
+      never expire and the cluster reports them with no `expires_at`,
+      which the rule treats as a vacuous pass. Elasticsearch-only;
+      OpenSearch has no equivalent commercial-licence surface.
+    probe: license
+    condition: |
+      (
+        !has(self.status) ||
+        self.status == 'active'
+      ) &&
+      (
+        !has(self.days_to_expiry) ||
+        double(self.days_to_expiry) >= 30.0
+      )
+    message: Cluster licence is expired or within 30 days of expiry.
+    remediation:
+      command: Renew the cluster licence (or downgrade to basic) before the cluster transitions into a degraded feature set; check /_license for the current expiry timestamp
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/update-license.html
+    tags: [prod, security]
+    dialects: [elasticsearch]
+    affected_versions: ["7.x", "8.x", "9.x"]
+    effort: low

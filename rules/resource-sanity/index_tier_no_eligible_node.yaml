@@ -1,0 +1,55 @@
+checks:
+  - id: index_tier_no_eligible_node
+    name: Index tier preference does not match any node in the cluster
+    category: resource_sanity
+    severity: error
+    description: >
+      An index whose `index.routing.allocation.include._tier_preference`
+      lists tiers that no live node serves cannot be allocated by the
+      cluster — its primaries either stay unassigned or fall back to
+      whatever tier the cluster's resolver picks. The two failure modes
+      look identical to an operator: shards in `unassigned`, or shards
+      assigned to nodes the operator did not intend. This rule cross-
+      references the per-index preference list with each node's
+      data-tier roles (`data_hot`, `data_warm`, `data_cold`,
+      `data_frozen`, `data_content`) and flags any index whose
+      preference set has zero overlap with any node's tier set. System
+      and data-stream backing indices (dot-prefixed) are excluded —
+      their tier preferences are managed by the cluster, not the
+      operator.
+    probe: tier_layout
+    condition: |
+      !has(self.indices) || size(self.indices) == 0 ||
+      self.indices.all(idx,
+        !has(idx.name) || idx.name.startsWith('.') ||
+        !has(idx.preferred_tiers) || size(idx.preferred_tiers) == 0 ||
+        idx.preferred_tiers.exists(t,
+          has(self.nodes) &&
+          self.nodes.exists(n,
+            has(n.tiers) && n.tiers.exists(nt, nt == t)
+          )
+        )
+      )
+    count_expression: |
+      has(self.indices) ?
+        size(self.indices.filter(idx,
+          has(idx.name) && !idx.name.startsWith('.') &&
+          has(idx.preferred_tiers) && size(idx.preferred_tiers) > 0 &&
+          idx.preferred_tiers.all(t,
+            !has(self.nodes) ||
+            !self.nodes.exists(n,
+              has(n.tiers) && n.tiers.exists(nt, nt == t)
+            )
+          )
+        )) : 0
+    message: '{{count}} index/indices request a data tier no node currently provides.'
+    remediation:
+      command: Add a node with the missing data-tier role (`data_hot`, `data_warm`, etc.) or rewrite the offending index's _tier_preference toward a tier the cluster actually has; check the source ILM policy or index template so the next rollover does not repeat the placement
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/data-tiers.html
+      esops_commands:
+        - esops index settings
+        - esops ops nodes
+    tags: [prod, capacity, availability]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

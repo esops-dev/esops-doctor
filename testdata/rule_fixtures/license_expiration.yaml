@@ -1,0 +1,42 @@
+rule: license_expiration
+cases:
+  - name: active basic licence with no expiry passes
+    expect: pass
+    data:
+      status: active
+      type: basic
+
+  - name: active platinum licence with plenty of time passes
+    expect: pass
+    data:
+      status: active
+      type: platinum
+      expires_at: "2099-01-01T00:00:00Z"
+      days_to_expiry: 25000.0
+
+  - name: licence at the 30-day boundary still passes
+    expect: pass
+    data:
+      status: active
+      type: gold
+      days_to_expiry: 30.5
+
+  - name: expired licence flags
+    expect: fail
+    data:
+      status: expired
+      type: gold
+      days_to_expiry: -3.0
+
+  - name: invalid licence flags
+    expect: fail
+    data:
+      status: invalid
+      type: trial
+
+  - name: active licence within 30 days flags
+    expect: fail
+    data:
+      status: active
+      type: platinum
+      days_to_expiry: 7.5

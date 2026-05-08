@@ -246,3 +246,61 @@ func TestListRulesPicksUpUserRulesDir(t *testing.T) {
 		t.Errorf("expected user_override_rule from user rules.d; got %q", stdout.String())
 	}
 }
+
+// TestListRulesCoverageTable spot-checks the table form of --coverage:
+// the header columns, at least one bucket row, and the summary footer.
+// The catalog is the embedded one, so a bucket like resource_sanity is
+// guaranteed to have rules in it.
+func TestListRulesCoverageTable(t *testing.T) {
+	var stdout bytes.Buffer
+	root := newRoot()
+	root.Writer = &stdout
+	if err := root.Run(context.Background(), []string{
+		"esops-doctor", "list-rules", "--coverage",
+	}); err != nil {
+		t.Fatalf("list-rules --coverage: %v", err)
+	}
+	out := stdout.String()
+	for _, want := range []string{
+		"BUCKET", "COVERED", "MISSING",
+		"resource_sanity",
+		"security",
+		"adjacent_additions",
+		"bucket members covered",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("coverage table missing %q\nfull output:\n%s", want, out)
+		}
+	}
+}
+
+// TestListRulesCoverageJSON asserts the structured form is parseable
+// and carries the bucket totals every downstream gate would key on.
+func TestListRulesCoverageJSON(t *testing.T) {
+	var stdout bytes.Buffer
+	root := newRoot()
+	root.Writer = &stdout
+	if err := root.Run(context.Background(), []string{
+		"esops-doctor", "--output", "json", "list-rules", "--coverage",
+	}); err != nil {
+		t.Fatalf("list-rules --coverage: %v", err)
+	}
+	var doc struct {
+		SchemaVersion int `json:"schema_version"`
+		Buckets       []struct {
+			Bucket  string   `json:"bucket"`
+			Total   int      `json:"total"`
+			Covered int      `json:"covered"`
+			Missing []string `json:"missing"`
+		} `json:"buckets"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &doc); err != nil {
+		t.Fatalf("not valid json: %v\n%s", err, stdout.String())
+	}
+	if doc.SchemaVersion != 1 {
+		t.Errorf("schema_version = %d, want 1", doc.SchemaVersion)
+	}
+	if len(doc.Buckets) == 0 {
+		t.Fatalf("expected at least one bucket; got %+v", doc)
+	}
+}

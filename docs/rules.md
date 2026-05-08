@@ -54,6 +54,23 @@ checks:
 - `dialects` — at least one of `elasticsearch` or `opensearch`.
 - `remediation.esops_commands` (optional) — concrete `esops` subcommands surfaced alongside `command` and `doc_url`. Each entry must start with `esops `.
 
+**Compliance-framework tags**
+
+Rules that satisfy a clause of a public compliance framework should
+carry a `framework:<name>` tag — `framework:cis`, `framework:soc2`,
+`framework:pci`. The existing `--tags` filter and the `cis-bench`
+profile then generalise without bespoke per-framework profiles, so an
+operator running `--tags framework:soc2` gets the SOC2-relevant subset.
+
+**Catalog coverage**
+
+Run `esops-doctor list-rules --coverage` to print which in-scope
+buckets the catalog covers and which are still missing. The buckets
+are the design scope's enumeration; adding a rule that fills a
+previously-empty bucket means listing it in
+`internal/cli/coverage.go` so the next coverage report shows the gap
+closed.
+
 ---
 
 ## CEL gotchas

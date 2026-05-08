@@ -1,0 +1,47 @@
+rule: version_skew
+cases:
+  - name: single-node cluster passes
+    expect: pass
+    data:
+      - name: n1
+        version: 8.13.4
+
+  - name: all nodes on the same version pass
+    expect: pass
+    data:
+      - name: n1
+        version: 8.13.4
+      - name: n2
+        version: 8.13.4
+      - name: n3
+        version: 8.13.4
+
+  - name: empty cluster passes vacuously
+    expect: pass
+    data: []
+
+  - name: nodes with no reported version pass
+    expect: pass
+    data:
+      - name: n1
+      - name: n2
+
+  - name: mid-rolling-upgrade flags
+    expect: fail
+    data:
+      - name: n1
+        version: 8.13.4
+      - name: n2
+        version: 8.13.4
+      - name: n3
+        version: 8.14.0
+
+  - name: two distinct versions across three nodes flags
+    expect: fail
+    data:
+      - name: n1
+        version: 1.3.10
+      - name: n2
+        version: 2.18.0
+      - name: n3
+        version: 2.18.0

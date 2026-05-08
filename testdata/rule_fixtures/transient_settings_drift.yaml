@@ -1,0 +1,36 @@
+rule: transient_settings_drift
+cases:
+  - name: empty transient scope passes
+    expect: pass
+    data:
+      persistent:
+        "cluster.routing.allocation.awareness.attributes": "zone"
+      transient: {}
+
+  - name: persistent populated, transient missing passes
+    expect: pass
+    data:
+      persistent:
+        "action.destructive_requires_name": "true"
+
+  - name: both scopes empty pass vacuously
+    expect: pass
+    data:
+      persistent: {}
+      transient: {}
+
+  - name: single transient setting flags
+    expect: fail
+    data:
+      persistent: {}
+      transient:
+        "cluster.routing.allocation.exclude._name": "node-old-1"
+
+  - name: multiple transient settings flag
+    expect: fail
+    data:
+      persistent:
+        "action.destructive_requires_name": "true"
+      transient:
+        "indices.breaker.fielddata.limit": "60%"
+        "cluster.routing.allocation.exclude._name": "node-old-1,node-old-2"

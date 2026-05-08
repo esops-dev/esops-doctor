@@ -1,0 +1,61 @@
+checks:
+  - id: circuit_breaker_limits
+    name: Circuit-breaker limits overridden by the operator
+    category: resource_sanity
+    severity: error
+    description: >
+      The cluster's circuit breakers are the last line of defence against
+      OOM-killing the JVM: the parent breaker
+      (`indices.breaker.total.limit`, default 95% of heap), the
+      field-data breaker (`indices.breaker.fielddata.limit`, default
+      40%), and the in-flight-request breaker
+      (`indices.breaker.request.limit`, default 60%) cooperatively reject
+      queries that would tip a node over before the JVM exits with no
+      record of who fired the gun. An operator narrowing any of these is
+      almost always silencing a noisy breaker rather than fixing the
+      workload that tripped it — which removes the protection without
+      removing the cause. Flag every cluster that has one of these
+      breaker keys set in the persistent or transient scope so a human
+      can review the override against the defaults; the override may be
+      intentional, but it should never be a surprise.
+    probe: cluster_settings_full
+    condition: |
+      (
+        !has(self.persistent) ||
+        (!('indices.breaker.total.limit' in self.persistent) &&
+         !('indices.breaker.fielddata.limit' in self.persistent) &&
+         !('indices.breaker.request.limit' in self.persistent))
+      ) &&
+      (
+        !has(self.transient) ||
+        (!('indices.breaker.total.limit' in self.transient) &&
+         !('indices.breaker.fielddata.limit' in self.transient) &&
+         !('indices.breaker.request.limit' in self.transient))
+      )
+    count_expression: |
+      (
+        (has(self.persistent) && 'indices.breaker.total.limit' in self.persistent) ||
+        (has(self.transient) && 'indices.breaker.total.limit' in self.transient)
+        ? 1 : 0
+      ) +
+      (
+        (has(self.persistent) && 'indices.breaker.fielddata.limit' in self.persistent) ||
+        (has(self.transient) && 'indices.breaker.fielddata.limit' in self.transient)
+        ? 1 : 0
+      ) +
+      (
+        (has(self.persistent) && 'indices.breaker.request.limit' in self.persistent) ||
+        (has(self.transient) && 'indices.breaker.request.limit' in self.transient)
+        ? 1 : 0
+      )
+    message: '{{count}} circuit-breaker limit(s) overridden away from the cluster default.'
+    remediation:
+      command: Restore the cluster-default breaker limits via PUT /_cluster/settings (parent 95%, fielddata 40%, request 60%) and triage whichever workload tripped the breaker rather than silencing it
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/circuit-breaker.html
+      esops_commands:
+        - esops ops settings get
+        - esops ops settings set
+    tags: [prod, resource, performance]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: low

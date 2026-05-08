@@ -20,7 +20,7 @@ checks:
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/secure-cluster.html
       esops_commands:
         - esops ops audit
-    tags: [prod, security]
+    tags: [prod, security, framework:cis, framework:soc2, framework:pci]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
     effort: high

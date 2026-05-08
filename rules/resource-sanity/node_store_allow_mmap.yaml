@@ -1,0 +1,42 @@
+checks:
+  - id: node_store_allow_mmap
+    name: node.store.allow_mmap is disabled
+    category: resource_sanity
+    severity: warn
+    description: >
+      Setting node.store.allow_mmap=false drops the cluster off the
+      mmapfs / hybridfs store types and forces niofs for every shard
+      on the affected node. That eliminates the page-cache-backed
+      fast path Lucene was designed around: term dictionaries, doc
+      values, and points trees that the kernel would have served
+      from memory on a hot index now go through a userspace read
+      syscall on every miss. The setting exists as an escape hatch
+      for hosts where vm.max_map_count cannot be raised — fix the
+      kernel limit and clear this flag rather than living with the
+      degraded store. A bootstrap-check failure on max_map_count is
+      the only legitimate reason to disable mmap; this rule fires on
+      every other case.
+    probe: node_settings
+    condition: |
+      size(self) == 0 ||
+      self.all(n,
+        !has(n.settings) ||
+        !('node.store.allow_mmap' in n.settings) ||
+        string(n.settings['node.store.allow_mmap']) != 'false'
+      )
+    count_expression: |
+      size(self.filter(n,
+        has(n.settings) &&
+        ('node.store.allow_mmap' in n.settings) &&
+        string(n.settings['node.store.allow_mmap']) == 'false'
+      ))
+    message: '{{count}} node(s) have node.store.allow_mmap=false; the cluster is on niofs and slower for it.'
+    remediation:
+      command: Raise vm.max_map_count to at least 262144 on the affected hosts (sysctl -w vm.max_map_count=262144 plus a sysctl.d entry), then remove node.store.allow_mmap from the node config and restart
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/index-modules-store.html
+      esops_commands:
+        - esops ops nodes
+    tags: [performance, resource]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium
