@@ -1,0 +1,38 @@
+rule: ccr_auto_follow_paused
+cases:
+  - name: no patterns configured passes
+    expect: pass
+    data: []
+
+  - name: every pattern active passes
+    expect: pass
+    data:
+      - name: logs
+        remote_cluster: leader-eu
+        leader_index_patterns: ["logs-*"]
+        follow_index_pattern: "follower-{{leader_index}}"
+        active: true
+      - name: events
+        remote_cluster: leader-us
+        leader_index_patterns: ["events-*"]
+        active: true
+
+  - name: paused pattern flags
+    expect: fail
+    data:
+      - name: logs
+        remote_cluster: leader-eu
+        leader_index_patterns: ["logs-*"]
+        active: false
+
+  - name: one active plus one paused flags
+    expect: fail
+    data:
+      - name: logs
+        remote_cluster: leader-eu
+        leader_index_patterns: ["logs-*"]
+        active: true
+      - name: events
+        remote_cluster: leader-us
+        leader_index_patterns: ["events-*"]
+        active: false

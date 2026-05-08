@@ -1,0 +1,76 @@
+checks:
+  - id: index_legacy_box_routing
+    name: Index uses legacy box-style allocation attribute routing
+    category: resource_sanity
+    severity: warn
+    description: >
+      Pre-data-tier deployments routed indices between hot / warm /
+      cold groups by writing a node attribute (`node.attr.box_type`)
+      and pointing the index at it via
+      `index.routing.allocation.{include,require,exclude}.box_type`.
+      Modern clusters use the typed `_tier_preference` setting and the
+      `data_hot` / `data_warm` / `data_cold` / `data_frozen` /
+      `data_content` node roles, which the cluster's allocator and
+      ILM both understand natively. Legacy box routing still works
+      for the moment, but it does not cooperate with ILM tier-based
+      lifecycle actions and is the canonical "we forgot to migrate
+      this index" finding during a rolling upgrade. System and
+      data-stream backing indices are excluded — their allocation is
+      the cluster's call.
+    probe: index_settings
+    condition: |
+      size(self) == 0 ||
+      self.all(idx,
+        !has(idx.index) || idx.index.startsWith('.') ||
+        !has(idx.settings) ||
+        !has(idx.settings.index) ||
+        !has(idx.settings.index.routing) ||
+        !has(idx.settings.index.routing.allocation) ||
+        (
+          (
+            !has(idx.settings.index.routing.allocation.include) ||
+            !has(idx.settings.index.routing.allocation.include.box_type)
+          ) &&
+          (
+            !has(idx.settings.index.routing.allocation.require) ||
+            !has(idx.settings.index.routing.allocation.require.box_type)
+          ) &&
+          (
+            !has(idx.settings.index.routing.allocation.exclude) ||
+            !has(idx.settings.index.routing.allocation.exclude.box_type)
+          )
+        )
+      )
+    count_expression: |
+      size(self.filter(idx,
+        has(idx.index) && !idx.index.startsWith('.') &&
+        has(idx.settings) &&
+        has(idx.settings.index) &&
+        has(idx.settings.index.routing) &&
+        has(idx.settings.index.routing.allocation) &&
+        (
+          (
+            has(idx.settings.index.routing.allocation.include) &&
+            has(idx.settings.index.routing.allocation.include.box_type)
+          ) ||
+          (
+            has(idx.settings.index.routing.allocation.require) &&
+            has(idx.settings.index.routing.allocation.require.box_type)
+          ) ||
+          (
+            has(idx.settings.index.routing.allocation.exclude) &&
+            has(idx.settings.index.routing.allocation.exclude.box_type)
+          )
+        )
+      ))
+    message: '{{count}} index/indices use legacy box_type allocation attributes instead of data tiers.'
+    remediation:
+      command: Migrate each affected index to `index.routing.allocation.include._tier_preference`; rewrite the source ILM policy or index template so the next rollover lands on the typed tier surface, then PUT null on the legacy box_type setting
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/migrate-to-data-tiers.html
+      esops_commands:
+        - esops index settings
+        - esops index template
+    tags: [hygiene, capacity, upgrade]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

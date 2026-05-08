@@ -1,0 +1,44 @@
+rule: circuit_breaker_limits
+cases:
+  - name: empty cluster settings pass
+    expect: pass
+    data:
+      persistent: {}
+      transient: {}
+
+  - name: persistent populated without breaker keys passes
+    expect: pass
+    data:
+      persistent:
+        "action.destructive_requires_name": "true"
+      transient: {}
+
+  - name: parent breaker overridden in persistent flags
+    expect: fail
+    data:
+      persistent:
+        "indices.breaker.total.limit": "60%"
+      transient: {}
+
+  - name: fielddata breaker overridden in transient flags
+    expect: fail
+    data:
+      persistent: {}
+      transient:
+        "indices.breaker.fielddata.limit": "10%"
+
+  - name: request breaker overridden in persistent flags
+    expect: fail
+    data:
+      persistent:
+        "indices.breaker.request.limit": "20%"
+      transient: {}
+
+  - name: all three breakers overridden flag together
+    expect: fail
+    data:
+      persistent:
+        "indices.breaker.total.limit": "70%"
+        "indices.breaker.fielddata.limit": "30%"
+      transient:
+        "indices.breaker.request.limit": "50%"

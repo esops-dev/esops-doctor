@@ -1,0 +1,35 @@
+checks:
+  - id: remote_cluster_unreachable
+    name: Configured remote cluster is not currently reachable
+    category: hygiene
+    severity: error
+    description: >
+      A remote cluster registered for cross-cluster search or
+      cross-cluster replication that the local cluster cannot reach
+      means every CCS-targeted query and every CCR follower silently
+      falls back to "no data" until the remote comes back. The
+      cluster's own `connected: false` flag is the canonical signal —
+      it survives transient network blips and only reports false when
+      the remote has been unreachable long enough to matter. Operators
+      with `skip_unavailable=true` set deliberately accept that some
+      remotes drop in and out; rules that flag both connected=false
+      AND skip_unavailable=false catch the riskier "search will hard-
+      fail when the remote is gone" case.
+    probe: remote_clusters
+    condition: |
+      size(self) == 0 ||
+      self.all(r, has(r.connected) && r.connected)
+    count_expression: |
+      size(self.filter(r,
+        has(r.connected) && !r.connected
+      ))
+    message: '{{count}} remote cluster(s) configured but not currently reachable.'
+    remediation:
+      command: Check the remote cluster's seed hosts (sniff mode) or proxy address (proxy mode) for reachability; either restore the link or de-register the remote via PUT /_cluster/settings if it is no longer needed
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/remote-clusters.html
+      esops_commands:
+        - esops ops settings get
+    tags: [prod, availability]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

@@ -1,0 +1,86 @@
+rule: index_legacy_box_routing
+cases:
+  - name: empty index list passes
+    expect: pass
+    data: []
+
+  - name: default settings pass
+    expect: pass
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            number_of_shards: "1"
+
+  - name: tier-preference routing passes
+    expect: pass
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            routing:
+              allocation:
+                include:
+                  _tier_preference: "data_hot"
+
+  - name: include.box_type flags
+    expect: fail
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            routing:
+              allocation:
+                include:
+                  box_type: "hot"
+
+  - name: require.box_type flags
+    expect: fail
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            routing:
+              allocation:
+                require:
+                  box_type: "warm"
+
+  - name: exclude.box_type flags
+    expect: fail
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            routing:
+              allocation:
+                exclude:
+                  box_type: "cold"
+
+  - name: system index using box_type is exempt
+    expect: pass
+    data:
+      - index: .ds-logs-2024
+        settings:
+          index:
+            routing:
+              allocation:
+                require:
+                  box_type: "hot"
+
+  - name: one with box_type one without flags
+    expect: fail
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            routing:
+              allocation:
+                include:
+                  _tier_preference: "data_hot"
+      - index: logs-2024-08
+        settings:
+          index:
+            routing:
+              allocation:
+                require:
+                  box_type: "warm"

@@ -253,6 +253,41 @@ func (f *fakeServiceTokenInspector) ServiceTokens(context.Context) ([]types.Serv
 	return f.Result, f.Err
 }
 
+// fakeRemoteClusterInspector covers the three RemoteClusterInspector
+// methods at once. RemoteClusters is shared across ES and OS so the
+// default zero-value (empty slice, no error) is the realistic
+// "nothing configured" shape. FollowerStats / AutoFollowPatterns are
+// CCR-only — set Err to client.ErrUnsupported to exercise the
+// dialect-skip path.
+type fakeRemoteClusterInspector struct {
+	Remotes     []types.RemoteCluster
+	Followers   []types.FollowerStats
+	AutoFollows []types.AutoFollowPattern
+	Err         error
+}
+
+func (f *fakeRemoteClusterInspector) RemoteClusters(context.Context) ([]types.RemoteCluster, error) {
+	return f.Remotes, f.Err
+}
+func (f *fakeRemoteClusterInspector) FollowerStats(context.Context) ([]types.FollowerStats, error) {
+	return f.Followers, f.Err
+}
+func (f *fakeRemoteClusterInspector) AutoFollowPatterns(context.Context) ([]types.AutoFollowPattern, error) {
+	return f.AutoFollows, f.Err
+}
+
+// fakeLicenseInspector returns a basic-licence-shaped LicenseStatus by
+// default. ES-only at the upstream layer; tests covering the OS adapter
+// override Err with client.ErrUnsupported.
+type fakeLicenseInspector struct {
+	Result types.LicenseStatus
+	Err    error
+}
+
+func (f *fakeLicenseInspector) License(context.Context) (types.LicenseStatus, error) {
+	return f.Result, f.Err
+}
+
 // fullClient assembles a *client.Client with every read-side capability
 // the registry dispatches to, populated with the given fakes. Tests
 // that exercise just one probe pass nils for the rest; tests that
@@ -285,6 +320,8 @@ func fullClient() *client.Client {
 		Realms:              &fakeRealmsInspector{},
 		APIKeys:             &fakeAPIKeyInspector{},
 		ServiceTokens:       &fakeServiceTokenInspector{},
+		RemoteClusters:      &fakeRemoteClusterInspector{},
+		License:             &fakeLicenseInspector{Result: types.LicenseStatus{Status: "active", Type: "basic"}},
 	}
 }
 
@@ -340,15 +377,20 @@ func TestRegistryTranslatesUnsupported(t *testing.T) {
 		{"deprecation_log on opensearch", DeprecationLog},
 		{"api_keys on opensearch", APIKeys},
 		{"service_tokens on opensearch", ServiceTokens},
+		{"follower_stats on basic-licence cluster", FollowerStats},
+		{"auto_follow_patterns on basic-licence cluster", AutoFollowPatterns},
+		{"license on opensearch", License},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			cl := &client.Client{
-				ILM:           &fakeILM{Err: client.ErrUnsupported},
-				ISM:           &fakeISM{Err: client.ErrUnsupported},
-				Deprecations:  &fakeDeprecationInspector{Err: client.ErrUnsupported},
-				APIKeys:       &fakeAPIKeyInspector{Err: client.ErrUnsupported},
-				ServiceTokens: &fakeServiceTokenInspector{Err: client.ErrUnsupported},
+				ILM:            &fakeILM{Err: client.ErrUnsupported},
+				ISM:            &fakeISM{Err: client.ErrUnsupported},
+				Deprecations:   &fakeDeprecationInspector{Err: client.ErrUnsupported},
+				APIKeys:        &fakeAPIKeyInspector{Err: client.ErrUnsupported},
+				ServiceTokens:  &fakeServiceTokenInspector{Err: client.ErrUnsupported},
+				RemoteClusters: &fakeRemoteClusterInspector{Err: client.ErrUnsupported},
+				License:        &fakeLicenseInspector{Err: client.ErrUnsupported},
 			}
 			reg := New(cl)
 			_, err := reg.Probe(context.Background(), c.probe)

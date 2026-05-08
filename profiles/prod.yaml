@@ -37,6 +37,17 @@ severity_overrides:
   node_store_allow_mmap: error
   suspect_discovery_settings: critical
   jvm_gc_ergonomics: error
+  circuit_breaker_limits: critical
+  search_default_limits: error
+  index_max_result_window_high: warn
+  remote_cluster_unreachable: critical
+  ccr_follower_unhealthy: critical
+  ccr_auto_follow_paused: warn
+  index_tier_preference_invalid: error
+  index_tier_no_eligible_node: error
+  index_legacy_box_routing: warn
+  ccr_lease_expiring: critical
+  license_expiration: critical
 
 skip_tags: []
 include_tags: []

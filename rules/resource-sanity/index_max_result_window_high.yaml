@@ -1,0 +1,46 @@
+checks:
+  - id: index_max_result_window_high
+    name: Index raises max_result_window past the safe-default ceiling
+    category: resource_sanity
+    severity: warn
+    description: >
+      The default `index.max_result_window` is 10 000 — the cluster's
+      cap on `from + size` for a single search request. Raising it
+      lets a paginated client request the 100 000th result through the
+      coordinating node's heap; raising it further turns a single bad
+      request into an OOM. Production indices that genuinely need
+      "the deep history" use `search_after` or `point_in_time` and
+      leave the window alone; the rule consumer flags any index that
+      has pushed the window past 50 000 so that an SRE can confirm
+      the trade-off was deliberate. System indices (dot-prefixed) and
+      data-stream backing indices (`.ds-*`) are excluded — their
+      windows are the cluster's call.
+    probe: index_settings
+    condition: |
+      size(self) == 0 ||
+      self.all(idx,
+        !has(idx.index) ||
+        idx.index.startsWith('.') ||
+        !has(idx.settings) ||
+        !has(idx.settings.index) ||
+        !has(idx.settings.index.max_result_window) ||
+        int(idx.settings.index.max_result_window) <= 50000
+      )
+    count_expression: |
+      size(self.filter(idx,
+        has(idx.index) && !idx.index.startsWith('.') &&
+        has(idx.settings) &&
+        has(idx.settings.index) &&
+        has(idx.settings.index.max_result_window) &&
+        int(idx.settings.index.max_result_window) > 50000
+      ))
+    message: '{{count}} index/indices set index.max_result_window above 50000.'
+    remediation:
+      command: Restore index.max_result_window to the cluster default and migrate the offending consumer to search_after / point_in_time pagination
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/index-modules.html#dynamic-index-settings
+      esops_commands:
+        - esops index settings
+    tags: [prod, performance]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

@@ -26,7 +26,7 @@ checks:
       doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/bootstrap-checks.html
       esops_commands:
         - esops ops nodes
-    tags: [prod, bootstrap]
+    tags: [prod, bootstrap, framework:cis]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
     effort: medium

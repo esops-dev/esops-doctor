@@ -22,7 +22,7 @@ checks:
       esops_commands:
         - esops ops audit
         - esops config view
-    tags: [prod, security, tls]
+    tags: [prod, security, tls, framework:cis, framework:soc2, framework:pci]
     dialects: [elasticsearch, opensearch]
     affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
     effort: medium

@@ -1,0 +1,54 @@
+rule: index_max_result_window_high
+cases:
+  - name: empty index list passes
+    expect: pass
+    data: []
+
+  - name: default settings pass
+    expect: pass
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            number_of_shards: "1"
+            number_of_replicas: "1"
+
+  - name: setting at default-friendly 10000 passes
+    expect: pass
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            max_result_window: "10000"
+
+  - name: window raised to 50000 still passes (boundary)
+    expect: pass
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            max_result_window: "50000"
+
+  - name: system index with high window is exempt
+    expect: pass
+    data:
+      - index: .ds-logs-2024
+        settings:
+          index:
+            max_result_window: "1000000"
+
+  - name: window pushed to 100000 flags
+    expect: fail
+    data:
+      - index: events-2024
+        settings:
+          index:
+            max_result_window: "100000"
+
+  - name: numeric (non-string) window flags
+    expect: fail
+    data:
+      - index: events-2024
+        settings:
+          index:
+            max_result_window: 200000

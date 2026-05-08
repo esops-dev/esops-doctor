@@ -1,0 +1,36 @@
+checks:
+  - id: ccr_follower_unhealthy
+    name: Cross-cluster replication follower is paused or has read failures
+    category: lifecycle
+    severity: error
+    description: >
+      An Elasticsearch CCR follower index that is paused, or whose most
+      recent read attempt failed, has stopped catching up to its leader
+      — every minute it stays in that state is a minute the local copy
+      drifts further behind. Both signals come from `/_ccr/stats`:
+      `paused: true` is the operator-visible knob (typically engaged
+      during a maintenance window) and `last_read_failure` carries the
+      cluster's own description of the last failure, populated only
+      while the follower is unhealthy. CCR is Elasticsearch-only; the
+      rule auto-skips on OpenSearch clusters and on basic-licence
+      Elasticsearch clusters where `/_ccr/stats` is not registered.
+    probe: follower_stats
+    condition: |
+      size(self) == 0 ||
+      self.all(f,
+        (!has(f.paused) || !f.paused) &&
+        (!has(f.last_read_failure) || f.last_read_failure == '')
+      )
+    count_expression: |
+      size(self.filter(f,
+        (has(f.paused) && f.paused) ||
+        (has(f.last_read_failure) && f.last_read_failure != '')
+      ))
+    message: '{{count}} CCR follower index/indices are paused or surfacing read failures.'
+    remediation:
+      command: Inspect /_ccr/stats for the affected followers; resume paused follows once the maintenance is done, and follow up the last_read_failure with the leader-side cause (auth, network, mapping incompatibility)
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/ccr-getting-started.html
+    tags: [prod, recoverability, availability]
+    dialects: [elasticsearch]
+    affected_versions: ["7.x", "8.x", "9.x"]
+    effort: medium

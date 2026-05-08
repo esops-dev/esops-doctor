@@ -1,0 +1,66 @@
+checks:
+  - id: search_default_limits
+    name: Search default limits raised to a high blast-radius value
+    category: resource_sanity
+    severity: warn
+    description: >
+      Cluster-level search defaults bound how much memory a single
+      query (or scroll) can pull through the coordinating node before
+      the search subsystem refuses. `search.max_buckets` (default
+      65 535) caps aggregation bucket counts;
+      `search.max_open_scroll_context` (default 500) caps the number of
+      scroll contexts a node will hold open for a slow consumer.
+      Raising either of these to a value an order of magnitude past
+      the default is the canonical "it worked on my laptop" anti-
+      pattern that turns one expensive query into a cluster-wide
+      incident. Flag persistent or transient overrides at or above the
+      thresholds an SRE would raise an eyebrow at: 250 000 buckets,
+      5 000 scroll contexts.
+    probe: cluster_settings_full
+    condition: |
+      (
+        !has(self.persistent) ||
+        !('search.max_buckets' in self.persistent) ||
+        int(string(self.persistent['search.max_buckets'])) < 250000
+      ) &&
+      (
+        !has(self.transient) ||
+        !('search.max_buckets' in self.transient) ||
+        int(string(self.transient['search.max_buckets'])) < 250000
+      ) &&
+      (
+        !has(self.persistent) ||
+        !('search.max_open_scroll_context' in self.persistent) ||
+        int(string(self.persistent['search.max_open_scroll_context'])) < 5000
+      ) &&
+      (
+        !has(self.transient) ||
+        !('search.max_open_scroll_context' in self.transient) ||
+        int(string(self.transient['search.max_open_scroll_context'])) < 5000
+      )
+    count_expression: |
+      (
+        (has(self.persistent) && 'search.max_buckets' in self.persistent &&
+         int(string(self.persistent['search.max_buckets'])) >= 250000) ||
+        (has(self.transient) && 'search.max_buckets' in self.transient &&
+         int(string(self.transient['search.max_buckets'])) >= 250000)
+        ? 1 : 0
+      ) +
+      (
+        (has(self.persistent) && 'search.max_open_scroll_context' in self.persistent &&
+         int(string(self.persistent['search.max_open_scroll_context'])) >= 5000) ||
+        (has(self.transient) && 'search.max_open_scroll_context' in self.transient &&
+         int(string(self.transient['search.max_open_scroll_context'])) >= 5000)
+        ? 1 : 0
+      )
+    message: '{{count}} cluster-level search limit(s) raised past the safe-default threshold.'
+    remediation:
+      command: Lower search.max_buckets / search.max_open_scroll_context back toward defaults via PUT /_cluster/settings; investigate the workload that demanded the override and budget the right query, not the right ceiling
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/search-settings.html
+      esops_commands:
+        - esops ops settings get
+        - esops ops settings set
+    tags: [prod, resource, performance]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

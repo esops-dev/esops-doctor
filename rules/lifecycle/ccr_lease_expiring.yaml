@@ -1,0 +1,43 @@
+checks:
+  - id: ccr_lease_expiring
+    name: Cross-cluster replication retention lease is approaching expiry
+    category: lifecycle
+    severity: error
+    description: >
+      A CCR follower index keeps a retention lease on every leader-side
+      shard so the leader cluster preserves the operations the follower
+      still needs to consume. The default lease retention period is
+      12 hours (`index.soft_deletes.retention_lease.period`); once a
+      lease expires the leader is free to discard the operations the
+      follower hasn't read yet, and the follower falls irrecoverably
+      behind — re-bootstrap is the only fix. The probe surfaces the
+      cluster's reported max retention-lease age across all of a
+      follower index's shards (`retention_lease_age_in_millis` from
+      `/_ccr/stats`), and the rule flags any follower whose lease has
+      been alive longer than 6 hours, the half-default-period
+      threshold an SRE wants to know about before the cluster goes
+      irrecoverable. CCR is Elasticsearch-only; the rule auto-skips on
+      OpenSearch and on basic-licence Elasticsearch clusters where
+      `/_ccr/stats` is not registered. Older clusters that do not
+      surface the lease-age field at all are treated as a vacuous
+      pass (the field reads as absent and the condition short-circuits).
+    probe: follower_stats
+    condition: |
+      size(self) == 0 ||
+      self.all(f,
+        !has(f.retention_lease_age_millis) ||
+        int(f.retention_lease_age_millis) <= 21600000
+      )
+    count_expression: |
+      size(self.filter(f,
+        has(f.retention_lease_age_millis) &&
+        int(f.retention_lease_age_millis) > 21600000
+      ))
+    message: '{{count}} CCR follower index/indices have a retention lease older than 6 hours.'
+    remediation:
+      command: Inspect /_ccr/stats for the affected followers; restore the leader-side connection (network, auth, licence) before the lease expires, otherwise re-bootstrap the follower from a recent snapshot
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/ccr-getting-started.html
+    tags: [prod, recoverability, availability]
+    dialects: [elasticsearch]
+    affected_versions: ["7.x", "8.x", "9.x"]
+    effort: medium

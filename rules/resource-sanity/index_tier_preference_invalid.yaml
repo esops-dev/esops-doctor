@@ -1,0 +1,55 @@
+checks:
+  - id: index_tier_preference_invalid
+    name: Index tier preference references an unknown data tier
+    category: resource_sanity
+    severity: error
+    description: >
+      The `index.routing.allocation.include._tier_preference` setting
+      lets an index pin itself to one of the cluster's named data
+      tiers — `data_hot`, `data_warm`, `data_cold`, `data_frozen`, or
+      `data_content`. A typo (`data_warn` for `data_warm`) produces a
+      preference the cluster cannot satisfy: the index's shards stay
+      unassigned until an operator notices, or migrate to whatever
+      tier the fallback resolves to. Flag any non-system index whose
+      tier preference list contains an unrecognised tier so the typo
+      is caught before the next ILM rollover replicates the mistake
+      across every backing index. System and data-stream backing
+      indices (dot-prefixed) are excluded — their tier preference is
+      managed by the cluster, not the operator.
+    probe: index_settings
+    condition: |
+      size(self) == 0 ||
+      self.all(idx,
+        !has(idx.index) ||
+        idx.index.startsWith('.') ||
+        !has(idx.settings) ||
+        !has(idx.settings.index) ||
+        !has(idx.settings.index.routing) ||
+        !has(idx.settings.index.routing.allocation) ||
+        !has(idx.settings.index.routing.allocation.include) ||
+        !has(idx.settings.index.routing.allocation.include._tier_preference) ||
+        string(idx.settings.index.routing.allocation.include._tier_preference)
+          .matches('^(data_hot|data_warm|data_cold|data_frozen|data_content)(,(data_hot|data_warm|data_cold|data_frozen|data_content))*$')
+      )
+    count_expression: |
+      size(self.filter(idx,
+        has(idx.index) && !idx.index.startsWith('.') &&
+        has(idx.settings) &&
+        has(idx.settings.index) &&
+        has(idx.settings.index.routing) &&
+        has(idx.settings.index.routing.allocation) &&
+        has(idx.settings.index.routing.allocation.include) &&
+        has(idx.settings.index.routing.allocation.include._tier_preference) &&
+        !string(idx.settings.index.routing.allocation.include._tier_preference)
+          .matches('^(data_hot|data_warm|data_cold|data_frozen|data_content)(,(data_hot|data_warm|data_cold|data_frozen|data_content))*$')
+      ))
+    message: '{{count}} index/indices have a tier preference referencing an unknown data tier.'
+    remediation:
+      command: Update the offending index's index.routing.allocation.include._tier_preference to a comma-separated list of {data_hot, data_warm, data_cold, data_frozen, data_content}; fix the source ILM policy or index template so the next rollover does not repeat the typo
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/data-tiers.html
+      esops_commands:
+        - esops index settings
+    tags: [prod, capacity]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: low

@@ -1,0 +1,86 @@
+rule: index_tier_preference_invalid
+cases:
+  - name: empty index list passes
+    expect: pass
+    data: []
+
+  - name: index without tier preference passes
+    expect: pass
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            number_of_shards: "1"
+
+  - name: data_hot preference passes
+    expect: pass
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            routing:
+              allocation:
+                include:
+                  _tier_preference: "data_hot"
+
+  - name: comma-separated valid tiers pass
+    expect: pass
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            routing:
+              allocation:
+                include:
+                  _tier_preference: "data_warm,data_hot"
+
+  - name: system index with bogus preference is exempt
+    expect: pass
+    data:
+      - index: .ds-logs-2024
+        settings:
+          index:
+            routing:
+              allocation:
+                include:
+                  _tier_preference: "data_warn"
+
+  - name: typo in tier name flags
+    expect: fail
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            routing:
+              allocation:
+                include:
+                  _tier_preference: "data_warn"
+
+  - name: unrecognised tier in comma-separated list flags
+    expect: fail
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            routing:
+              allocation:
+                include:
+                  _tier_preference: "data_hot,data_glacial"
+
+  - name: one good plus one bad flags
+    expect: fail
+    data:
+      - index: logs-2024-09
+        settings:
+          index:
+            routing:
+              allocation:
+                include:
+                  _tier_preference: "data_hot"
+      - index: events-2024
+        settings:
+          index:
+            routing:
+              allocation:
+                include:
+                  _tier_preference: "data_archive"

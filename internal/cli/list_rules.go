@@ -12,6 +12,7 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 
 	"github.com/esops-dev/esops-doctor/internal/exit"
+	"github.com/esops-dev/esops-doctor/internal/logging"
 	"github.com/esops-dev/esops-doctor/internal/rules"
 )
 
@@ -46,6 +47,12 @@ func listRulesCommand() *cli.Command {
 				Name:  "rule-id",
 				Usage: "Show only the named rules (repeatable or comma-separated)",
 			},
+			&cli.BoolFlag{
+				Name: "coverage",
+				Usage: "Print which in-scope buckets from the design scope are covered by the catalog and which are not " +
+					"(operates on the unfiltered catalog; --tags / --skip-tags / --rule-id are ignored, " +
+					"because the question the flag answers is about catalog completeness, not run scope)",
+			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return runListRules(ctx, cmd, cmdWriter(cmd))
@@ -65,6 +72,34 @@ func runListRules(ctx context.Context, cmd *cli.Command, stdout io.Writer) error
 	cat, err := loadLayeredCatalog(cmd.String("rules-dir"))
 	if err != nil {
 		return err
+	}
+
+	// --coverage operates on the unfiltered catalog: the question the
+	// flag answers is "is the catalog covering the design scope?", and
+	// honouring --tags / --rule-id here would conflate "what's in the
+	// catalog" with "what's in this run". Filtering still happens for
+	// the regular --output paths below.
+	if cmd.Bool("coverage") {
+		// Warn loudly when an operator pairs --coverage with a filter
+		// flag — the flag is silently ignored by design, but a
+		// stderr-side notice keeps the behaviour from surprising
+		// anyone who expected the filter to narrow the buckets.
+		if len(cmd.StringSlice("rule-id")) > 0 ||
+			len(cmd.StringSlice("tags")) > 0 ||
+			len(cmd.StringSlice("skip-tags")) > 0 {
+			logging.Logger().Warn(
+				"doctor.list_rules.coverage.filters_ignored",
+				"reason", "--coverage operates on the full catalog; --rule-id / --tags / --skip-tags ignored")
+		}
+		doc := computeCoverage(cat.Rules)
+		switch format {
+		case "table":
+			return renderCoverageTable(stdout, doc)
+		case "json":
+			return renderCoverageJSON(stdout, doc)
+		case "yaml":
+			return renderCoverageYAML(stdout, doc)
+		}
 	}
 
 	filtered, _ := applyCatalogFilter(cat, catalogFilter{
