@@ -1,0 +1,28 @@
+checks:
+  - id: deprecated_realms
+    name: Deprecated authentication realm in use
+    category: security
+    severity: warn
+    description: >
+      Surfaces realms whose type the cluster's reported version flags
+      as deprecated. Catching a deprecated realm before the next major
+      removes it lets operators plan the migration on their own
+      schedule rather than under upgrade pressure. Disabled realms
+      still count — a disabled-but-present realm needs to come out of
+      the config too, or it lights up the rule again on the next
+      version bump.
+    probe: realms
+    condition: |
+      self.all(r, !has(r.deprecated) || r.deprecated == false)
+    count_expression: |
+      size(self.filter(r, has(r.deprecated) && r.deprecated == true))
+    message: '{{count}} authentication realm(s) use a deprecated type.'
+    remediation:
+      command: Migrate the deprecated realm(s) to a supported type (typically native, ldap, oidc, or saml) and remove the deprecated configuration
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/realms.html
+      esops_commands:
+        - esops ops audit
+    tags: [prod, security]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

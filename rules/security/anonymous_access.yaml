@@ -1,0 +1,32 @@
+checks:
+  - id: anonymous_access
+    name: Anonymous access enabled
+    category: security
+    severity: critical
+    description: >
+      An anonymous-access posture lets unauthenticated requests through
+      with an implicit identity. ES infers this from
+      xpack.security.authc.anonymous.roles (any roles configured =
+      enabled); OS reads plugins.security.authcz.anonymous_auth_enabled.
+      A non-nil anonymous block on the security audit means the
+      adapter probed and reported the effective state. When security
+      is disabled entirely, this rule passes and security_disabled
+      owns the finding instead — the two rules complement rather than
+      double-fire.
+    probe: security_audit
+    condition: |
+      !has(self.status) || !has(self.status.enabled) || self.status.enabled == false ||
+      !has(self.anonymous) || !has(self.anonymous.enabled) || self.anonymous.enabled == false
+    count_expression: |
+      (has(self.status) && has(self.status.enabled) && self.status.enabled == true &&
+       has(self.anonymous) && has(self.anonymous.enabled) && self.anonymous.enabled == true) ? 1 : 0
+    message: Cluster is configured to allow anonymous access.
+    remediation:
+      command: Remove xpack.security.authc.anonymous.roles on Elasticsearch or set plugins.security.authcz.anonymous_auth_enabled=false on OpenSearch and require authentication
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/anonymous-access.html
+      esops_commands:
+        - esops ops audit
+    tags: [prod, security]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

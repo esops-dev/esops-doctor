@@ -20,10 +20,14 @@ import (
 const (
 	Aliases              = "aliases"
 	Allocation           = "allocation"
+	APIKeys              = "api_keys"
+	AuditLog             = "audit_log"
+	AuditWarnings        = "audit_warnings"
 	ClusterHealth        = "cluster_health"
 	ClusterSettings      = "cluster_settings"
 	ClusterSettingsFull  = "cluster_settings_full"
 	DeprecationLog       = "deprecation_log"
+	HTTPTLS              = "http_tls"
 	ILMState             = "ilm_state"
 	ISMState             = "ism_state"
 	Indices              = "indices"
@@ -34,8 +38,10 @@ const (
 	NodeStats            = "node_stats"
 	Nodes                = "nodes"
 	PendingTasks         = "pending_tasks"
+	Realms               = "realms"
 	Recovery             = "recovery"
 	SecurityAudit        = "security_audit"
+	ServiceTokens        = "service_tokens"
 	SnapshotRepositories = "snapshot_repositories"
 	Snapshots            = "snapshots"
 	TransportTLS         = "transport_tls"
@@ -46,10 +52,14 @@ const (
 var known = map[string]struct{}{
 	Aliases:              {},
 	Allocation:           {},
+	APIKeys:              {},
+	AuditLog:             {},
+	AuditWarnings:        {},
 	ClusterHealth:        {},
 	ClusterSettings:      {},
 	ClusterSettingsFull:  {},
 	DeprecationLog:       {},
+	HTTPTLS:              {},
 	ILMState:             {},
 	ISMState:             {},
 	Indices:              {},
@@ -60,8 +70,10 @@ var known = map[string]struct{}{
 	NodeStats:            {},
 	Nodes:                {},
 	PendingTasks:         {},
+	Realms:               {},
 	Recovery:             {},
 	SecurityAudit:        {},
+	ServiceTokens:        {},
 	SnapshotRepositories: {},
 	Snapshots:            {},
 	TransportTLS:         {},
@@ -273,6 +285,36 @@ func (r *Registry) dispatch(ctx context.Context, name string) (any, error) {
 			return nil, notConfigured(name)
 		}
 		return fetchMappings(ctx, cl.Mappings)
+	case HTTPTLS:
+		if cl.HTTPTLS == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchHTTPTLS(ctx, cl.HTTPTLS)
+	case AuditLog:
+		if cl.AuditLog == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchAuditLog(ctx, cl.AuditLog)
+	case AuditWarnings:
+		if cl.AuditLog == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchAuditWarnings(ctx, cl.AuditLog)
+	case Realms:
+		if cl.Realms == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchRealms(ctx, cl.Realms)
+	case APIKeys:
+		if cl.APIKeys == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchAPIKeys(ctx, cl.APIKeys)
+	case ServiceTokens:
+		if cl.ServiceTokens == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchServiceTokens(ctx, cl.ServiceTokens)
 	default:
 		return nil, fmt.Errorf("%w: %s", engine.ErrProbeNotFound, name)
 	}

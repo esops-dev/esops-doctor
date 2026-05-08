@@ -21,6 +21,12 @@ severity_overrides:
   default_credentials: info
   script_limits: info
   node_to_node_encryption: info
+  http_tls: info
+  audit_logging_enabled: info
+  recent_audit_warnings: info
+  deprecated_realms: info
+  stale_api_keys: info
+  stale_service_tokens: info
 
 skip_tags:
   - prod-only

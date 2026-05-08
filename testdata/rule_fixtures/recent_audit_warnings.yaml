@@ -1,0 +1,17 @@
+rule: recent_audit_warnings
+cases:
+  - name: empty window passes
+    expect: pass
+    data: []
+
+  - name: warnings present fail
+    expect: fail
+    data:
+      - timestamp: "2026-05-08T08:00:00Z"
+        layer: rest
+        type: authentication_failed
+        count: 1
+      - timestamp: "2026-05-08T08:01:00Z"
+        layer: rest
+        type: access_denied
+        count: 1

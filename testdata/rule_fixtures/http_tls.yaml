@@ -1,0 +1,18 @@
+rule: http_tls
+cases:
+  - name: http tls enabled passes
+    expect: pass
+    data:
+      enabled: true
+      client_auth: optional
+      protocols: ["TLSv1.3", "TLSv1.2"]
+
+  - name: http tls disabled fails
+    expect: fail
+    data:
+      enabled: false
+
+  - name: missing enabled field fails
+    expect: fail
+    data:
+      protocols: ["TLSv1.2"]

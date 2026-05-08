@@ -1,0 +1,34 @@
+checks:
+  - id: stale_service_tokens
+    name: Long-lived service-account tokens
+    category: security
+    severity: warn
+    description: >
+      Flags index-stored service-account tokens (Fleet, APM Server,
+      and similar integration credentials) older than 365 days. The
+      cluster issues these once and they survive until the operator
+      rotates them through the security API. File-realm tokens
+      (declared on disk in service_tokens) are out of scope — the
+      cluster does not timestamp them and rotation requires node
+      access, which is a separate workflow.
+    probe: service_tokens
+    condition: |
+      self.all(t,
+        !has(t.source) || t.source != 'index' ||
+        !has(t.age_days) || t.age_days <= 365
+      )
+    count_expression: |
+      size(self.filter(t,
+        has(t.source) && t.source == 'index' &&
+        has(t.age_days) && t.age_days > 365
+      ))
+    message: '{{count}} index-stored service-account token(s) older than 365 days.'
+    remediation:
+      command: Issue new tokens for the affected service accounts via the security API and delete the old credentials once integrations have rolled over
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/service-accounts.html
+      esops_commands:
+        - esops ops audit
+    tags: [prod, security]
+    dialects: [elasticsearch]
+    affected_versions: ["7.x", "8.x", "9.x"]
+    effort: medium

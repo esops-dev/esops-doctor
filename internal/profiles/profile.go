@@ -3,7 +3,9 @@ package profiles
 import (
 	"fmt"
 	"io/fs"
+	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -68,6 +70,30 @@ func (c *Catalog) Get(name string) (*Profile, error) {
 // $XDG_CONFIG_HOME) are deferred to a later milestone.
 func LoadEmbedded() (*Catalog, error) {
 	return LoadFS(esopsdoctor.Profiles, "profiles")
+}
+
+// LoadFile reads a single profile YAML at path. Used by --profile-file
+// so an operator can ship a custom severity scheme without checking
+// it into a rules-dir or shadowing an embedded profile name.
+//
+// A missing or empty `name:` falls back to the file stem so the
+// resulting Profile is still self-identifying when the cli logs it.
+// Schema/validation errors propagate verbatim — the caller wraps with
+// the right exit category.
+func LoadFile(path string) (*Profile, error) {
+	data, err := os.ReadFile(path) // #nosec G304 -- caller-supplied via --profile-file
+	if err != nil {
+		return nil, fmt.Errorf("reading profile %s: %w", path, err)
+	}
+	var prof Profile
+	if uerr := yaml.Unmarshal(data, &prof); uerr != nil {
+		return nil, fmt.Errorf("parsing profile %s: %w", path, uerr)
+	}
+	prof.Source = path
+	if prof.Name == "" {
+		prof.Name = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	}
+	return &prof, nil
 }
 
 // LoadFS walks fsys under root for *.yaml files and parses each into a

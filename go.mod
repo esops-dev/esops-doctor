@@ -1,9 +1,9 @@
 module github.com/esops-dev/esops-doctor
 
-go 1.26.2
+go 1.26.3
 
 require (
-	github.com/esops-dev/esops-go v0.0.9
+	github.com/esops-dev/esops-go v0.0.10
 	github.com/google/cel-go v0.28.0
 	github.com/testcontainers/testcontainers-go v0.42.0
 	github.com/urfave/cli/v3 v3.8.0

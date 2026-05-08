@@ -49,6 +49,7 @@ func newRoot() *cli.Command {
 			listRulesCommand(),
 			explainCommand(),
 			validateRulesCommand(),
+			newProfileCommand(),
 			versionCommand(),
 		},
 	}

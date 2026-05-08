@@ -1,0 +1,33 @@
+rule: stale_service_tokens
+cases:
+  - name: empty list passes
+    expect: pass
+    data: []
+
+  - name: young index-stored tokens pass
+    expect: pass
+    data:
+      - name: fleet-token
+        namespace: elastic
+        service: fleet-server
+        source: index
+        creation: "2026-02-01T00:00:00Z"
+        age_days: 96.0
+
+  - name: file-realm token without age passes
+    expect: pass
+    data:
+      - name: legacy-file-token
+        namespace: elastic
+        service: apm-server
+        source: file
+
+  - name: stale index-stored token fails
+    expect: fail
+    data:
+      - name: fleet-token
+        namespace: elastic
+        service: fleet-server
+        source: index
+        creation: "2024-01-01T00:00:00Z"
+        age_days: 858.5

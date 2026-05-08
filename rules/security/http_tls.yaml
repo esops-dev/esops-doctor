@@ -1,0 +1,32 @@
+checks:
+  - id: http_tls
+    name: HTTP TLS not enabled cluster-wide
+    category: security
+    severity: critical
+    description: >
+      The cluster's HTTP layer is what every external client connects
+      to (esops itself, dashboards, application traffic). Without TLS
+      on that layer, credentials and document content travel in
+      cleartext. Distinct from node-to-node transport TLS surfaced by
+      node_to_node_encryption — both have to be on. The cluster reports
+      HTTPTLSPosture.enabled=true only when every reachable node has
+      HTTP TLS configured. Distinct from tls_transport, which reports
+      the operator's own connection scheme — this rule reports what
+      the cluster says about itself, so a misconfigured node hidden
+      behind a load balancer surfaces here when tls_transport passes.
+    probe: http_tls
+    condition: |
+      has(self.enabled) && self.enabled == true
+    count_expression: |
+      (has(self.enabled) && self.enabled == true) ? 0 : 1
+    message: HTTP-layer TLS is not enabled cluster-wide.
+    remediation:
+      command: Configure xpack.security.http.ssl on Elasticsearch (or plugins.security.ssl.http on OpenSearch) on every node and roll the cluster
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/security-basic-setup-https.html
+      esops_commands:
+        - esops ops audit
+        - esops ops nodes
+    tags: [prod, security, tls]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: high

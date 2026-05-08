@@ -49,29 +49,39 @@ const (
 )
 
 // notApplicableOnES is the set of probes whose upstream adapter for
-// Elasticsearch returns client.ErrUnsupported (the dialect-doesn't-
-// have-this-feature case). The integration sweep asserts these surface
-// as engine.ErrProbeNotApplicable rather than returning data.
+// Elasticsearch returns client.ErrUnsupported in this test setup. That
+// covers two cases collapsed into the same sentinel: a feature the
+// dialect genuinely lacks (none today), and a feature the test cluster
+// has switched off (api_keys / service_tokens, both unavailable when
+// xpack.security.enabled=false — the test container's posture). The
+// integration sweep asserts these surface as engine.ErrProbeNotApplicable
+// rather than returning data.
 var notApplicableOnES = map[string]bool{
-	ISMState: true, // ISM is OpenSearch-only
+	ISMState:      true, // ISM is OpenSearch-only
+	APIKeys:       true, // Security disabled in the test container; upstream returns ErrUnsupported
+	ServiceTokens: true, // Same as api_keys — security off ⇒ unsupported
 }
 
 // notApplicableOnOS is the OS counterpart.
 var notApplicableOnOS = map[string]bool{
 	ILMState:       true, // ILM is Elasticsearch-only
 	DeprecationLog: true, // /_migration/deprecations is Elasticsearch-only
+	APIKeys:        true, // API keys are an Elasticsearch-only surface
+	ServiceTokens:  true, // Service tokens are an Elasticsearch-only surface
 }
 
 // skippedOnOS lists probes the OS sweep does not exercise. The OS test
 // container runs with DISABLE_SECURITY_PLUGIN=true to avoid TLS / admin
 // credential plumbing, which means /_plugins/_security/api/* doesn't
-// answer. Per the upstream SecurityAuditor contract that should surface
-// as Status.Enabled=false, but the adapter currently raises HTTP 400
-// from the missing handler. Drop entries here when the plugin is
-// enabled in the test container, or when upstream returns the
-// documented disabled-sentinel.
+// answer. Per the upstream SecurityAuditor / AuditLogInspector / Realms
+// contracts those probes should surface a disabled-sentinel, but the
+// adapters currently raise HTTP 400 from the missing handler. Drop
+// entries here when the plugin is enabled in the test container, or
+// when upstream returns the documented disabled-sentinel.
 var skippedOnOS = map[string]bool{
 	SecurityAudit: true,
+	AuditLog:      true,
+	Realms:        true,
 }
 
 func TestIntegrationElasticsearch(t *testing.T) {

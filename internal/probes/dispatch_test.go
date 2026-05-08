@@ -196,6 +196,57 @@ func (f *fakeMappingsInspector) GetMappings(context.Context, types.MappingFilter
 	return f.Result, nil
 }
 
+type fakeHTTPTLSInspector struct{ Result types.HTTPTLSPosture }
+
+func (f *fakeHTTPTLSInspector) HTTPTLS(context.Context) (types.HTTPTLSPosture, error) {
+	return f.Result, nil
+}
+
+// fakeAuditLogInspector defaults to ErrUnsupported so the OS-without-
+// audit-plugin and ES-without-audit-licence cases are the realistic
+// shape an empty fake takes. Tests that want a populated result
+// override Config / Warnings and clear Err.
+type fakeAuditLogInspector struct {
+	Config   types.AuditConfig
+	Warnings []types.AuditWarning
+	Err      error
+}
+
+func (f *fakeAuditLogInspector) AuditConfig(context.Context) (types.AuditConfig, error) {
+	return f.Config, f.Err
+}
+func (f *fakeAuditLogInspector) AuditWarnings(context.Context, types.AuditWarningsRequest) ([]types.AuditWarning, error) {
+	return f.Warnings, f.Err
+}
+
+type fakeRealmsInspector struct{ Result []types.Realm }
+
+func (f *fakeRealmsInspector) Realms(context.Context) ([]types.Realm, error) {
+	return f.Result, nil
+}
+
+// fakeAPIKeyInspector and fakeServiceTokenInspector default to no
+// error so the dispatch sweep produces non-nil JSON shapes. The
+// ErrUnsupported case is the OS-side reality and gets its own test
+// arm in TestRegistryTranslatesUnsupported.
+type fakeAPIKeyInspector struct {
+	Result []types.APIKey
+	Err    error
+}
+
+func (f *fakeAPIKeyInspector) APIKeys(context.Context) ([]types.APIKey, error) {
+	return f.Result, f.Err
+}
+
+type fakeServiceTokenInspector struct {
+	Result []types.ServiceToken
+	Err    error
+}
+
+func (f *fakeServiceTokenInspector) ServiceTokens(context.Context) ([]types.ServiceToken, error) {
+	return f.Result, f.Err
+}
+
 // fullClient assembles a *client.Client with every read-side capability
 // the registry dispatches to, populated with the given fakes. Tests
 // that exercise just one probe pass nils for the rest; tests that
@@ -222,6 +273,11 @@ func fullClient() *client.Client {
 		Allocation:          &fakeAllocationInspector{},
 		TransportTLS:        &fakeTransportTLSInspector{},
 		Mappings:            &fakeMappingsInspector{},
+		HTTPTLS:             &fakeHTTPTLSInspector{},
+		AuditLog:            &fakeAuditLogInspector{},
+		Realms:              &fakeRealmsInspector{},
+		APIKeys:             &fakeAPIKeyInspector{},
+		ServiceTokens:       &fakeServiceTokenInspector{},
 	}
 }
 
@@ -275,13 +331,17 @@ func TestRegistryTranslatesUnsupported(t *testing.T) {
 		{"ilm on opensearch", ILMState},
 		{"ism on elasticsearch", ISMState},
 		{"deprecation_log on opensearch", DeprecationLog},
+		{"api_keys on opensearch", APIKeys},
+		{"service_tokens on opensearch", ServiceTokens},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			cl := &client.Client{
-				ILM:          &fakeILM{Err: client.ErrUnsupported},
-				ISM:          &fakeISM{Err: client.ErrUnsupported},
-				Deprecations: &fakeDeprecationInspector{Err: client.ErrUnsupported},
+				ILM:           &fakeILM{Err: client.ErrUnsupported},
+				ISM:           &fakeISM{Err: client.ErrUnsupported},
+				Deprecations:  &fakeDeprecationInspector{Err: client.ErrUnsupported},
+				APIKeys:       &fakeAPIKeyInspector{Err: client.ErrUnsupported},
+				ServiceTokens: &fakeServiceTokenInspector{Err: client.ErrUnsupported},
 			}
 			reg := New(cl)
 			_, err := reg.Probe(context.Background(), c.probe)
