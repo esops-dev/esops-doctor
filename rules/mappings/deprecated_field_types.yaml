@@ -1,0 +1,38 @@
+checks:
+  - id: deprecated_field_types
+    name: Mapping uses deprecated field types
+    category: mappings
+    severity: warn
+    description: >
+      Surfaces fields whose `type` is one the cluster has marked
+      deprecated or removed in a current major version. The classic
+      offender is `string` (split into `text` + `keyword` in 5.0); a
+      few more recent additions — `_all`, the legacy `geo_point`
+      string format, and the deprecated `flattened` shape — round out
+      the set. A reindex is the only path to a clean mapping; flagging
+      these early gives the operator time to plan it.
+      System indices (dot-prefixed) are excluded — their schema is the
+      cluster's call.
+    probe: mapping_fields
+    condition: |
+      size(self) == 0 ||
+      self.all(f,
+        f.is_system ||
+        !(f.type in ['string', '_all', 'token_count_legacy'])
+      )
+    count_expression: |
+      size(self.filter(f,
+        !f.is_system &&
+        f.type in ['string', '_all', 'token_count_legacy']
+      ))
+    message: '{{count}} field(s) in non-system indices use a deprecated field type.'
+    remediation:
+      command: Update the index template to use the modern field type and reindex affected indices so the live mapping matches
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/removal-of-types.html
+      esops_commands:
+        - esops index template
+        - esops migrate reindex
+    tags: [prod, mappings]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: high

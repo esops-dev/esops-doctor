@@ -1,0 +1,52 @@
+rule: retention_gap
+cases:
+  - name: empty repo list passes
+    expect: pass
+    data: []
+
+  - name: repo with no SUCCESS yet (no gap field) passes
+    expect: pass
+    data:
+      - repository: prod
+        snapshot_count: 1
+        success_count: 0
+        failed_count: 1
+
+  - name: repo with small gap passes
+    expect: pass
+    data:
+      - repository: prod
+        snapshot_count: 7
+        success_count: 7
+        latest_success_age_hours: 12.0
+        max_success_gap_hours: 24.5
+
+  - name: repo with 7-day gap passes (boundary)
+    expect: pass
+    data:
+      - repository: prod
+        snapshot_count: 5
+        success_count: 5
+        latest_success_age_hours: 168.0
+        max_success_gap_hours: 168.0
+
+  - name: repo with 8-day gap flags
+    expect: fail
+    data:
+      - repository: prod
+        snapshot_count: 5
+        success_count: 5
+        latest_success_age_hours: 192.0
+        max_success_gap_hours: 192.5
+
+  - name: only one repo of two has the gap — still flags
+    expect: fail
+    data:
+      - repository: prod
+        snapshot_count: 7
+        success_count: 7
+        max_success_gap_hours: 24.0
+      - repository: archive
+        snapshot_count: 4
+        success_count: 4
+        max_success_gap_hours: 720.0

@@ -1,0 +1,46 @@
+rule: untested_restore
+cases:
+  - name: empty repo list passes
+    expect: pass
+    data: []
+
+  - name: empty repo (zero snapshots) passes — caught by snapshot_repository_configured
+    expect: pass
+    data:
+      - repository: prod
+        snapshot_count: 0
+        success_count: 0
+        failed_count: 0
+        partial_count: 0
+        in_progress_count: 0
+
+  - name: repo with at least one SUCCESS passes
+    expect: pass
+    data:
+      - repository: prod
+        snapshot_count: 5
+        success_count: 4
+        failed_count: 1
+        partial_count: 0
+        in_progress_count: 0
+
+  - name: repo with snapshots but no SUCCESS flags
+    expect: fail
+    data:
+      - repository: prod
+        snapshot_count: 3
+        success_count: 0
+        failed_count: 3
+        partial_count: 0
+        in_progress_count: 0
+
+  - name: one healthy repo and one untested flags
+    expect: fail
+    data:
+      - repository: prod
+        snapshot_count: 10
+        success_count: 10
+      - repository: archive
+        snapshot_count: 2
+        success_count: 0
+        failed_count: 2

@@ -1,0 +1,47 @@
+rule: deprecated_field_types
+cases:
+  - name: empty field list passes
+    expect: pass
+    data: []
+
+  - name: only modern types passes
+    expect: pass
+    data:
+      - index: logs-2024-09
+        path: message
+        type: text
+        has_ignore_above: false
+        is_system: false
+      - index: logs-2024-09
+        path: user.id
+        type: keyword
+        has_ignore_above: true
+        ignore_above: 1024
+        is_system: false
+
+  - name: deprecated string in system index passes
+    expect: pass
+    data:
+      - index: .ds-fleet-actions-results-2024.09-000001
+        path: agent.version
+        type: string
+        has_ignore_above: false
+        is_system: true
+
+  - name: deprecated string field flags
+    expect: fail
+    data:
+      - index: events-2024
+        path: user.name
+        type: string
+        has_ignore_above: false
+        is_system: false
+
+  - name: deprecated _all field flags
+    expect: fail
+    data:
+      - index: events-2024
+        path: _all
+        type: _all
+        has_ignore_above: false
+        is_system: false

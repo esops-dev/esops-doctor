@@ -1,0 +1,37 @@
+checks:
+  - id: retention_gap
+    name: Snapshot schedule has a multi-day gap
+    category: lifecycle
+    severity: warn
+    description: >
+      The largest gap between consecutive SUCCESS snapshots in a
+      repository — including the gap between the most recent SUCCESS
+      and "now" — exceeds 7 days (168 hours). Catches the silent
+      "snapshots have been failing for a week even though older
+      successes exist" failure mode that snapshot_failed_state can
+      miss when the operator has already pruned the FAILED entries.
+      Repositories with fewer than two SUCCESS snapshots are skipped;
+      the untested_restore rule covers the zero-success case.
+    probe: snapshot_recency
+    condition: |
+      size(self) == 0 ||
+      self.all(r,
+        !has(r.max_success_gap_hours) ||
+        r.max_success_gap_hours <= 168.0
+      )
+    count_expression: |
+      size(self.filter(r,
+        has(r.max_success_gap_hours) &&
+        r.max_success_gap_hours > 168.0
+      ))
+    message: '{{count}} repository/repositories have a SUCCESS-snapshot gap longer than 7 days.'
+    remediation:
+      command: Investigate the schedule for the affected repository — failed runs that were pruned still leave the gap; fix the underlying cause and re-run
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/snapshots-take-snapshot.html
+      esops_commands:
+        - esops snapshot list
+        - esops snapshot verify
+    tags: [prod, recoverability]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium

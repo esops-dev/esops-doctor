@@ -1,0 +1,37 @@
+checks:
+  - id: untested_restore
+    name: Snapshot repository has never produced a successful snapshot
+    category: lifecycle
+    severity: error
+    description: >
+      A snapshot repository that contains snapshots but has zero
+      SUCCESS-state entries is a repository nobody has confirmed
+      end-to-end restore-readiness against. Either every attempt
+      failed (in which case the schedule is dressed-up no-op) or the
+      operator never came back to verify the SUCCESS path. The
+      repository is dressed-up data loss waiting to happen — flag it
+      so the operator can run a targeted restore-into-staging test
+      and either fix the schedule or remove the dead repo.
+    probe: snapshot_recency
+    condition: |
+      size(self) == 0 ||
+      self.all(r,
+        r.snapshot_count == 0 ||
+        r.success_count > 0
+      )
+    count_expression: |
+      size(self.filter(r,
+        r.snapshot_count > 0 &&
+        r.success_count == 0
+      ))
+    message: '{{count}} snapshot repository/repositories have snapshots but no SUCCESS entry.'
+    remediation:
+      command: Run a restore-into-staging test against the repository, then fix whatever caused every attempt to fail (permissions, disk, plugin) and re-run the schedule
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/snapshots-restore-snapshot.html
+      esops_commands:
+        - esops snapshot list
+        - esops snapshot verify
+    tags: [prod, recoverability]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: medium
