@@ -14,6 +14,7 @@ import (
 
 	"github.com/esops-dev/esops-go/pkg/config"
 
+	"github.com/esops-dev/esops-doctor/internal/baseline"
 	"github.com/esops-dev/esops-doctor/internal/engine"
 	"github.com/esops-dev/esops-doctor/internal/exit"
 	"github.com/esops-dev/esops-doctor/internal/findings"
@@ -32,6 +33,16 @@ import (
 // test wants. Typed via probes.Connector so this file stays free of a
 // direct pkg/client import (TestPkgClientOnlyInProbes-enforced).
 var connectFn probes.Connector = probes.Connect
+
+// defaultScanTimeout is the per-cluster ceiling on prefetch + evaluate
+// when --scan-timeout is not set. Picked as a backstop against a
+// misbehaving cluster: per-request timeouts (config defaults.timeout)
+// already bound each probe call, but a long enough sequence of slow
+// responses could still stretch a scan indefinitely. Five minutes is
+// far above the few-second p99 of a healthy scan, while still short
+// enough that an operator notices a hang. Pass --scan-timeout 0 to
+// disable the ceiling.
+const defaultScanTimeout = 5 * time.Minute
 
 // scanCommand is the diagnostic entry point: load config, resolve the
 // target context (or honour --url), connect via probes.Connect, compile
@@ -90,6 +101,15 @@ func scanCommand() *cli.Command {
 				Name:  "targets",
 				Usage: "Multi-cluster fan-out: comma-separated context names from the esops config (repeatable)",
 			},
+			&cli.StringFlag{
+				Name:  "baseline",
+				Usage: "Path to a previous scan (SARIF or JSON); findings present in the baseline do not trip --fail-on",
+			},
+			&cli.DurationFlag{
+				Name:  "scan-timeout",
+				Value: defaultScanTimeout,
+				Usage: "Per-cluster ceiling on prefetch + evaluate (0 disables; per-request timeouts still apply)",
+			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return runScan(ctx, cmd, cmdWriter(cmd))
@@ -143,6 +163,11 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 		return err
 	}
 
+	scanTimeout := cmd.Duration("scan-timeout")
+	if scanTimeout < 0 {
+		return exit.Usage("--scan-timeout cannot be negative (got %s); pass 0 to disable", scanTimeout)
+	}
+
 	multiTargets, isMulti, err := resolveMultiTargets(cmd)
 	if err != nil {
 		return err
@@ -153,13 +178,18 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 		return err
 	}
 
+	baselineSet, err := loadBaseline(cmd)
+	if err != nil {
+		return err
+	}
+
 	opts := report.Options{
 		SummaryOnly: cmd.Bool("summary-only"),
 		Quiet:       cmd.Bool("quiet"),
 	}
 
 	if isMulti {
-		return runMultiClusterScan(ctx, stdout, format, opts, failOn, eng, waiverSet, multiTargets)
+		return runMultiClusterScan(ctx, stdout, format, opts, failOn, eng, waiverSet, baselineSet, multiTargets, scanTimeout)
 	}
 
 	ctxCfg, err := resolveTargetContext(cmd)
@@ -168,7 +198,9 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 	}
 	target := targetSpec{Label: ctxCfg.URL, Context: ctxCfg}
 
-	outcome := scanOneCluster(ctx, eng, waiverSet, target)
+	scanCtx, cancel := scanContext(ctx, scanTimeout)
+	defer cancel()
+	outcome := scanOneCluster(scanCtx, eng, waiverSet, baselineSet, target)
 	if outcome.connectErr != nil {
 		return outcome.connectErr
 	}
@@ -247,13 +279,13 @@ type clusterOutcome struct {
 
 // scanOneCluster runs the per-cluster part of a scan: connect, fetch
 // the health summary, prefetch every applicable probe, evaluate the
-// engine against the cache, apply waivers, and build the report
-// header. It does not render — the caller decides whether the output
-// is single-cluster (existing behaviour) or one block in a
-// multi-cluster report.
+// engine against the cache, apply waivers and the baseline, and
+// build the report header. It does not render — the caller decides
+// whether the output is single-cluster (existing behaviour) or one
+// block in a multi-cluster report.
 //
 // The engine is reused across calls; nothing here mutates it.
-func scanOneCluster(ctx context.Context, eng *engine.Engine, waiverSet *waivers.Set, target targetSpec) clusterOutcome {
+func scanOneCluster(ctx context.Context, eng *engine.Engine, waiverSet *waivers.Set, baselineSet *baseline.Set, target targetSpec) clusterOutcome {
 	out := clusterOutcome{Label: target.Label}
 
 	// scanStart is the operator-facing "when the scan ran" timestamp:
@@ -307,6 +339,30 @@ func scanOneCluster(ctx context.Context, eng *engine.Engine, waiverSet *waivers.
 			"source", waiverSet.Source())
 	}
 
+	// Apply the operator-supplied baseline so findings that were
+	// already present in a previous scan don't trip the --fail-on
+	// gate. Drift entries surface as warn-level log lines: a
+	// baseline that names a rule no longer in the catalog, or a
+	// finding that no longer fires, should not silently rot.
+	if !baselineSet.Empty() {
+		drift := baselineSet.Apply(results, catalogRuleIndex(eng))
+		logging.Logger().Info("doctor.scan.baseline.applied",
+			"target", target.Label,
+			"matched", baseline.AppliedCount(results),
+			"baseline_size", baselineSet.Len(),
+			"source", baselineSet.Source(),
+			"format", baselineSet.Format())
+		for _, d := range drift {
+			logging.Logger().Warn("doctor.scan.baseline.drift",
+				"target", target.Label,
+				"rule_id", d.Entry.Fingerprint.RuleID,
+				"dialect", d.Entry.Fingerprint.Dialect,
+				"target_id", d.Entry.Fingerprint.Target,
+				"reason", string(d.Reason),
+				"hint", "update the baseline (drop the stale entry, or re-record a fresh scan)")
+		}
+	}
+
 	logRuleTimings(results)
 
 	out.Header = report.Header{
@@ -325,6 +381,18 @@ func scanOneCluster(ctx context.Context, eng *engine.Engine, waiverSet *waivers.
 	}
 	out.Results = results
 	return out
+}
+
+// scanContext returns ctx wrapped with the operator-supplied
+// --scan-timeout (or defaultScanTimeout) so prefetch + evaluate
+// cannot run past the ceiling. A zero or negative timeout disables
+// the wrap and returns a no-op cancel — callers always defer the
+// returned cancel so the wrapped context's resources get released.
+func scanContext(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if timeout <= 0 {
+		return parent, func() {}
+	}
+	return context.WithTimeout(parent, timeout)
 }
 
 // logRuleTimings emits one debug-level log line per rule with status,
@@ -453,6 +521,46 @@ func resolveProfile(name, file string) (*profiles.Profile, error) {
 		return nil, exit.Usage("%s", err.Error())
 	}
 	return prof, nil
+}
+
+// catalogRuleIndex returns the set of rule IDs the engine carries
+// (already filtered by profile / --tags / --rule-id). Used by the
+// baseline-apply step to distinguish "rule retired" drift from
+// "rule ran but did not fail" drift.
+func catalogRuleIndex(eng *engine.Engine) map[string]bool {
+	if eng == nil {
+		return nil
+	}
+	out := map[string]bool{}
+	for _, r := range eng.Rules() {
+		out[r.ID] = true
+	}
+	return out
+}
+
+// loadBaseline resolves the --baseline flag. Empty flag returns a
+// nil set (the caller treats that as "no baseline"). A non-empty
+// flag pointing at a missing file is a usage error (exit 2); a
+// file present but unparseable is a catalog-style error (exit 21,
+// rule catalog category) since it's a load-time configuration
+// problem rather than a runtime cluster issue.
+func loadBaseline(cmd *cli.Command) (*baseline.Set, error) {
+	path := strings.TrimSpace(cmd.String("baseline"))
+	if path == "" {
+		return nil, nil
+	}
+	set, err := baseline.Load(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, exit.Usage("%s", err.Error())
+		}
+		return nil, exit.Catalog("%s", err.Error())
+	}
+	logging.Logger().Debug("doctor.scan.baseline.loaded",
+		"source", set.Source(),
+		"format", set.Format(),
+		"entries", set.Len())
+	return set, nil
 }
 
 // aliasIndex builds a `deprecated_alias → canonical_id` map from the

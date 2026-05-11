@@ -77,6 +77,9 @@ func Table(w io.Writer, h Header, results []engine.RuleResult, opts TableOptions
 		if err := writeWaived(w, results); err != nil {
 			return err
 		}
+		if err := writeBaselined(w, results); err != nil {
+			return err
+		}
 		if !opts.Quiet {
 			if err := writeSkipped(w, results); err != nil {
 				return err
@@ -87,12 +90,48 @@ func Table(w io.Writer, h Header, results []engine.RuleResult, opts TableOptions
 		}
 	}
 
-	_, err := fmt.Fprintf(w, "summary: %d critical, %d error, %d warn, %d info; %d passed, %d skipped, %d errored, %d waived | %s\n",
+	_, err := fmt.Fprintf(w, "summary: %d critical, %d error, %d warn, %d info; %d passed, %d skipped, %d errored, %d waived, %d baselined | %s\n",
 		counts.critical, counts.error, counts.warn, counts.info,
-		counts.passed, counts.skipped, counts.errored, counts.waived,
+		counts.passed, counts.skipped, counts.errored, counts.waived, counts.baselined,
 		formatHeader(h),
 	)
 	return err
+}
+
+// writeBaselined emits the baseline-matched section. Failures that
+// match an operator-supplied baseline render here so a brownfield CI
+// gate sees both "these were known" and "these are new" in the same
+// report.
+func writeBaselined(w io.Writer, results []engine.RuleResult) error {
+	var rows []engine.RuleResult
+	for _, r := range results {
+		if r.Status == engine.RuleStatusFail && isBaselined(r.Finding) && !isActiveWaiver(r.Finding) {
+			rows = append(rows, r)
+		}
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w, "\nbaselined (%d):\n", len(rows)); err != nil {
+		return err
+	}
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	for _, r := range rows {
+		f := r.Finding
+		sev := f.Severity.String()
+		if sev == "" {
+			sev = "?"
+		}
+		src := ""
+		if f.Baseline != nil {
+			src = f.Baseline.Source
+		}
+		if _, err := fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\n",
+			sev, f.RuleID, src, oneLine(f.Message)); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
 }
 
 // formatHeader renders the cluster identity line that follows the
@@ -133,10 +172,15 @@ func formatDuration(d time.Duration) string {
 // and used by the cli to decide the exit code. Waived counts active
 // (non-expired) waivers; expired waivers fall back into the severity
 // columns because the suppression failed and the finding fires loud.
+// Baselined counts findings matched against an operator-supplied
+// baseline (--baseline); those are excluded from the severity columns
+// just like active waivers — a baseline-matched failure does not
+// trip the --fail-on gate.
 type summary struct {
 	critical, error, warn, info int
 	passed, skipped, errored    int
 	waived                      int
+	baselined                   int
 }
 
 func classify(results []engine.RuleResult) summary {
@@ -155,6 +199,10 @@ func classify(results []engine.RuleResult) summary {
 			}
 			if isActiveWaiver(r.Finding) {
 				s.waived++
+				continue
+			}
+			if isBaselined(r.Finding) {
+				s.baselined++
 				continue
 			}
 			switch r.Finding.Severity {
@@ -180,10 +228,18 @@ func isActiveWaiver(f *findings.Finding) bool {
 	return f != nil && f.Suppression != nil && !f.Suppression.Expired
 }
 
+// isBaselined reports whether f matched an operator-supplied baseline
+// entry. Baselined findings are excluded from the fail-on gate so an
+// operator adopting doctor on a brownfield cluster can wire the gate
+// today without "fix everything in one go".
+func isBaselined(f *findings.Finding) bool {
+	return f != nil && f.Baseline != nil
+}
+
 // MaxFailingSeverity returns the most urgent severity across failing
 // rules, or SeverityUnknown when none failed. Findings with an active
-// (non-expired) waiver are excluded so the operator's documented
-// exception clears the --fail-on gate.
+// (non-expired) waiver, or a baseline match, are excluded so the
+// operator's documented exception clears the --fail-on gate.
 func MaxFailingSeverity(results []engine.RuleResult) findings.Severity {
 	max := findings.SeverityUnknown
 	for _, r := range results {
@@ -191,6 +247,9 @@ func MaxFailingSeverity(results []engine.RuleResult) findings.Severity {
 			continue
 		}
 		if isActiveWaiver(r.Finding) {
+			continue
+		}
+		if isBaselined(r.Finding) {
 			continue
 		}
 		if r.Finding.Severity > max {
@@ -204,11 +263,13 @@ func MaxFailingSeverity(results []engine.RuleResult) findings.Severity {
 // either has no waiver or has one that's already expired. An expired
 // waiver lands in this table (its message already carries the
 // "[waiver expired …]" prefix from the waivers Apply step) so the
-// failure stays loud.
+// failure stays loud. Baseline-matched findings are excluded — they
+// render in their own section so a brownfield-baseline report stays
+// readable.
 func writeFindings(w io.Writer, dialect string, results []engine.RuleResult) error {
 	var fails []engine.RuleResult
 	for _, r := range results {
-		if r.Status == engine.RuleStatusFail && !isActiveWaiver(r.Finding) {
+		if r.Status == engine.RuleStatusFail && !isActiveWaiver(r.Finding) && !isBaselined(r.Finding) {
 			fails = append(fails, r)
 		}
 	}

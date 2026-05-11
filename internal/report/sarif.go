@@ -70,10 +70,11 @@ type sarifTool struct {
 }
 
 type sarifDriver struct {
-	Name           string      `json:"name"`
-	Version        string      `json:"version"`
-	InformationURI string      `json:"informationUri"`
-	Rules          []sarifRule `json:"rules"`
+	Name           string         `json:"name"`
+	Version        string         `json:"version"`
+	InformationURI string         `json:"informationUri"`
+	Rules          []sarifRule    `json:"rules"`
+	Properties     map[string]any `json:"properties,omitempty"`
 }
 
 type sarifRule struct {
@@ -91,12 +92,13 @@ type sarifRuleDefaults struct {
 }
 
 type sarifResult struct {
-	RuleID       string             `json:"ruleId"`
-	RuleIndex    int                `json:"ruleIndex"`
-	Level        string             `json:"level,omitempty"`
-	Kind         string             `json:"kind,omitempty"`
-	Message      sarifText          `json:"message"`
-	Suppressions []sarifSuppression `json:"suppressions,omitempty"`
+	RuleID              string             `json:"ruleId"`
+	RuleIndex           int                `json:"ruleIndex"`
+	Level               string             `json:"level,omitempty"`
+	Kind                string             `json:"kind,omitempty"`
+	Message             sarifText          `json:"message"`
+	Suppressions        []sarifSuppression `json:"suppressions,omitempty"`
+	PartialFingerprints map[string]string  `json:"partialFingerprints,omitempty"`
 }
 
 type sarifText struct {
@@ -129,16 +131,26 @@ type sarifInvoc struct {
 
 func buildSarif(h Header, results []engine.RuleResult, opts Options) sarifDoc {
 	rules, ruleIndex := sarifRules(results)
+	driver := sarifDriver{
+		Name:           "esops-doctor",
+		Version:        version.Version,
+		InformationURI: sarifToolURI,
+		Rules:          rules,
+	}
+	// Embed the run's dialect on the driver.properties bag so a SARIF
+	// consumer that needs to attribute findings to elasticsearch /
+	// opensearch (and the baseline loader specifically) round-trips
+	// it. Driver.properties is the SARIF-blessed spot for tool-
+	// specific extensions; omit when empty so the legacy hand-built
+	// test fixtures keep their byte-for-byte shape.
+	if h.Dialect != "" {
+		driver.Properties = map[string]any{"dialect": h.Dialect}
+	}
 	doc := sarifDoc{
 		Schema:  sarifSchema,
 		Version: sarifVersion,
 		Runs: []sarifRun{{
-			Tool: sarifTool{Driver: sarifDriver{
-				Name:           "esops-doctor",
-				Version:        version.Version,
-				InformationURI: sarifToolURI,
-				Rules:          rules,
-			}},
+			Tool:    sarifTool{Driver: driver},
 			Results: []sarifResult{},
 			Invocs:  []sarifInvoc{sarifInvocFromHeader(h, !anyErrored(results))},
 		}},
@@ -220,6 +232,33 @@ func sarifResultOf(r engine.RuleResult, ruleIdx int, dialect string) sarifResult
 					Status:        "accepted",
 					Justification: r.Finding.Suppression.Justification,
 				}}
+			} else if isBaselined(r.Finding) {
+				// A baseline-matched finding is preexisting per the
+				// operator's recorded scan. Map it onto a SARIF
+				// suppression so GitHub code-scanning and similar
+				// consumers stop double-counting it as a fresh
+				// failure. underReview (rather than accepted) reflects
+				// the semantics: "this was here before, schedule a
+				// fix" — not "this is permanently excused".
+				justification := "matched operator-supplied baseline"
+				if src := r.Finding.Baseline.Source; src != "" {
+					justification = "matched baseline " + src
+				}
+				res.Suppressions = []sarifSuppression{{
+					Kind:          "external",
+					Status:        "underReview",
+					Justification: justification,
+				}}
+			}
+			// partialFingerprints carries the canonical baseline match
+			// key so a future `scan --baseline previous.sarif` round-
+			// trips the (rule_id, dialect, target) tuple precisely.
+			// SARIF defines partialFingerprints exactly for this case
+			// (stable cross-scan identity), so consumers ignore the
+			// extra keys without complaint.
+			res.PartialFingerprints = map[string]string{
+				"rule_id": r.RuleID,
+				"dialect": dialect,
 			}
 		}
 	case engine.RuleStatusSkipped:

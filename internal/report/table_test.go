@@ -54,7 +54,7 @@ func TestTableLinesUpFindingsAndSummary(t *testing.T) {
 		"SEVERITY", "RULE", "CATEGORY", "MESSAGE",
 		"critical", "heap_size", "Heap size misconfigured",
 		"warn", "zone_awareness",
-		"summary: 1 critical, 0 error, 1 warn, 0 info; 1 passed, 0 skipped, 0 errored, 0 waived | dialect=opensearch",
+		"summary: 1 critical, 0 error, 1 warn, 0 info; 1 passed, 0 skipped, 0 errored, 0 waived, 0 baselined | dialect=opensearch",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q\nfull output:\n%s", want, out)
