@@ -35,21 +35,25 @@ func newRoot() *cli.Command {
 			"Configuration is loaded from the same file as esops\n" +
 			"(~/.config/esops/config.yaml or $ESOPS_CONFIG); see the README for the\n" +
 			"context shape and a CI gating recipe.",
-		// EnableShellCompletion lets the binary respond to
-		// --generate-shell-completion when sourced from the bundled
-		// scripts under completions/. Operators install the script
-		// once (per-shell convention, see CONTRIBUTING.md), and tab-
-		// completion thereafter works without doctor learning a
-		// dedicated `completion` subcommand.
-		EnableShellCompletion: true,
-		Flags:                 globalFlags(),
-		Before:                initLogger,
+		// EnableShellCompletion lets the binary respond to the
+		// --generate-shell-completion protocol the per-shell scripts
+		// rely on. The bundled scripts under completions/ are still
+		// shipped pre-rendered by package installers; the
+		// `completion <shell>` subcommand (wired via
+		// ConfigureShellCompletionCommand) renders the same scripts
+		// on demand for source builds and interactive use.
+		EnableShellCompletion:           true,
+		ConfigureShellCompletionCommand: configureCompletion,
+		Flags:                           globalFlags(),
+		Before:                          initLogger,
 		Commands: []*cli.Command{
 			scanCommand(),
 			listRulesCommand(),
 			explainCommand(),
 			validateRulesCommand(),
 			newProfileCommand(),
+			diffCommand(),
+			configCommand(),
 			versionCommand(),
 		},
 	}

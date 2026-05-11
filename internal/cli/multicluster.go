@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
+	"github.com/esops-dev/esops-doctor/internal/baseline"
 	"github.com/esops-dev/esops-doctor/internal/engine"
 	"github.com/esops-dev/esops-doctor/internal/exit"
 	"github.com/esops-dev/esops-doctor/internal/findings"
@@ -39,7 +41,9 @@ func runMultiClusterScan(
 	failOn findings.Severity,
 	eng *engine.Engine,
 	waiverSet *waivers.Set,
+	baselineSet *baseline.Set,
 	targets []targetSpec,
+	scanTimeout time.Duration,
 ) error {
 	logging.Logger().Info("doctor.scan.multicluster.start", "count", len(targets))
 
@@ -51,7 +55,13 @@ func runMultiClusterScan(
 		}
 		logging.Logger().Info("doctor.scan.multicluster.cluster",
 			"index", i+1, "of", len(targets), "target", t.Label)
-		out := scanOneCluster(ctx, eng, waiverSet, t)
+		// Per-cluster deadline so a slow cluster doesn't eat the
+		// budget of the next one. Cancel inline rather than via
+		// defer — deferring inside a loop would accumulate cancel
+		// closures across every cluster.
+		scanCtx, cancel := scanContext(ctx, scanTimeout)
+		out := scanOneCluster(scanCtx, eng, waiverSet, baselineSet, t)
+		cancel()
 		if out.connectErr != nil {
 			logging.Logger().Warn("doctor.scan.multicluster.connect_failed",
 				"target", t.Label, "err", out.connectErr)

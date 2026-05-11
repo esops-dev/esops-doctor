@@ -6,7 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -46,6 +48,37 @@ func TestBinaryBudget(t *testing.T) {
 		t.Errorf("stripped binary is %d bytes (%.1f MB); budget is %d bytes (%.1f MB) — investigate the dep audit before raising the limit",
 			info.Size(), float64(info.Size())/(1024*1024),
 			int64(MaxStrippedBinarySize), float64(MaxStrippedBinarySize)/(1024*1024))
+	}
+}
+
+// TestBinaryBudgetMatchesMakefile keeps the in-test budget constant
+// in sync with the Makefile's BIN_BUDGET_BYTES so `make bin-size` and
+// `go test` exercise the same number. Either file can be the source
+// of truth; the test only fails when they diverge. Cheap (it reads
+// one file, no build) so it stays out of the -short skip.
+func TestBinaryBudgetMatchesMakefile(t *testing.T) {
+	root, err := moduleRoot()
+	if err != nil {
+		t.Skipf("cannot resolve module root: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "Makefile"))
+	if err != nil {
+		t.Fatalf("read Makefile: %v", err)
+	}
+	// Match the assignment regardless of `?=` / `=` / surrounding
+	// whitespace so a cosmetic Makefile edit doesn't break the test.
+	re := regexp.MustCompile(`(?m)^BIN_BUDGET_BYTES\s*\??=\s*(\d+)`)
+	m := re.FindStringSubmatch(string(data))
+	if m == nil {
+		t.Fatal("BIN_BUDGET_BYTES not found in Makefile; the make target was removed or renamed")
+	}
+	n, err := strconv.ParseInt(m[1], 10, 64)
+	if err != nil {
+		t.Fatalf("parse Makefile budget %q: %v", m[1], err)
+	}
+	if n != MaxStrippedBinarySize {
+		t.Errorf("Makefile BIN_BUDGET_BYTES=%d but binary_test.go MaxStrippedBinarySize=%d — keep them in sync (Makefile bin-size target / internal/cli/binary_test.go)",
+			n, int64(MaxStrippedBinarySize))
 	}
 }
 

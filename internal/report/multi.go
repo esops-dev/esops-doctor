@@ -138,12 +138,13 @@ func writeFleetSummary(w io.Writer, clusters []ClusterReport) error {
 		total.skipped += s.skipped
 		total.errored += s.errored
 		total.waived += s.waived
+		total.baselined += s.baselined
 	}
 	parts := []string{
 		fmt.Sprintf("fleet: %d clusters, %d unreachable", len(clusters), errored),
-		fmt.Sprintf("%d critical, %d error, %d warn, %d info; %d passed, %d skipped, %d errored, %d waived",
+		fmt.Sprintf("%d critical, %d error, %d warn, %d info; %d passed, %d skipped, %d errored, %d waived, %d baselined",
 			total.critical, total.error, total.warn, total.info,
-			total.passed, total.skipped, total.errored, total.waived),
+			total.passed, total.skipped, total.errored, total.waived, total.baselined),
 	}
 	if !earliestStart.IsZero() {
 		parts = append(parts, "started "+earliestStart.UTC().Format(time.RFC3339))

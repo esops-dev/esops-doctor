@@ -21,6 +21,21 @@ type Finding struct {
 	// keeps the failure live and surfaces "waiver expired" so the
 	// suppression cannot rot silently.
 	Suppression *Suppression
+
+	// Baseline is non-nil when this finding matched an entry in the
+	// operator-supplied baseline (--baseline PATH). The fail-on gate
+	// skips matched findings so a CI gate adopting doctor on a
+	// brownfield cluster only fails on findings that did not appear
+	// in the baseline. The finding stays in the report.
+	Baseline *BaselineMatch
+}
+
+// BaselineMatch records that a finding was present in the baseline
+// passed via --baseline. Source is the baseline file the match came
+// from; renderers surface it so the operator can trace why a finding
+// was treated as preexisting.
+type BaselineMatch struct {
+	Source string `json:"source,omitempty" yaml:"source,omitempty"`
 }
 
 // Remediation describes how to fix a finding. Command is a free-text

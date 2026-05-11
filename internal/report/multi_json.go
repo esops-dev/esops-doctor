@@ -64,6 +64,7 @@ type FleetSummary struct {
 	Skipped             int            `json:"skipped" yaml:"skipped"`
 	Errored             int            `json:"errored" yaml:"errored"`
 	Waived              int            `json:"waived" yaml:"waived"`
+	Baselined           int            `json:"baselined" yaml:"baselined"`
 	BySeverity          SeverityCounts `json:"by_severity" yaml:"by_severity"`
 }
 
@@ -135,6 +136,7 @@ func buildFleetDocument(clusters []ClusterReport, opts Options) FleetDocument {
 		doc.Fleet.Skipped += d.Summary.Skipped
 		doc.Fleet.Errored += d.Summary.Errored
 		doc.Fleet.Waived += d.Summary.Waived
+		doc.Fleet.Baselined += d.Summary.Baselined
 		doc.Fleet.BySeverity.Critical += d.Summary.BySeverity.Critical
 		doc.Fleet.BySeverity.Error += d.Summary.BySeverity.Error
 		doc.Fleet.BySeverity.Warn += d.Summary.BySeverity.Warn

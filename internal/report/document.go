@@ -74,13 +74,16 @@ type Scan struct {
 // the same numbers appear regardless of format. Waived counts the
 // active-waiver findings excluded from BySeverity / Failed; expired
 // waivers fall back into Failed and BySeverity because the suppression
-// failed and the finding fires loud.
+// failed and the finding fires loud. Baselined counts findings
+// matched against an operator-supplied baseline (--baseline); like
+// Waived, those are excluded from BySeverity / Failed.
 type Summary struct {
 	Passed     int            `json:"passed" yaml:"passed"`
 	Failed     int            `json:"failed" yaml:"failed"`
 	Skipped    int            `json:"skipped" yaml:"skipped"`
 	Errored    int            `json:"errored" yaml:"errored"`
 	Waived     int            `json:"waived" yaml:"waived"`
+	Baselined  int            `json:"baselined" yaml:"baselined"`
 	BySeverity SeverityCounts `json:"by_severity" yaml:"by_severity"`
 }
 
@@ -102,21 +105,36 @@ type SeverityCounts struct {
 // populate for the status that produces them, kept tidy by
 // `omitempty`.
 type Result struct {
-	RuleID      string                `json:"rule_id" yaml:"rule_id"`
-	Name        string                `json:"name,omitempty" yaml:"name,omitempty"`
-	Category    string                `json:"category,omitempty" yaml:"category,omitempty"`
-	Severity    string                `json:"severity,omitempty" yaml:"severity,omitempty"`
-	Description string                `json:"description,omitempty" yaml:"description,omitempty"`
-	Probe       string                `json:"probe,omitempty" yaml:"probe,omitempty"`
-	Dialects    []string              `json:"dialects,omitempty" yaml:"dialects,omitempty"`
-	Tags        []string              `json:"tags,omitempty" yaml:"tags,omitempty"`
-	Status      string                `json:"status" yaml:"status"`
-	DurationMs  int64                 `json:"duration_ms" yaml:"duration_ms"`
-	Message     string                `json:"message,omitempty" yaml:"message,omitempty"`
-	Remediation *findings.Remediation `json:"remediation,omitempty" yaml:"remediation,omitempty"`
-	SkipReason  string                `json:"skip_reason,omitempty" yaml:"skip_reason,omitempty"`
-	Error       string                `json:"error,omitempty" yaml:"error,omitempty"`
-	Suppression *findings.Suppression `json:"suppression,omitempty" yaml:"suppression,omitempty"`
+	RuleID      string                  `json:"rule_id" yaml:"rule_id"`
+	Name        string                  `json:"name,omitempty" yaml:"name,omitempty"`
+	Category    string                  `json:"category,omitempty" yaml:"category,omitempty"`
+	Severity    string                  `json:"severity,omitempty" yaml:"severity,omitempty"`
+	Description string                  `json:"description,omitempty" yaml:"description,omitempty"`
+	Probe       string                  `json:"probe,omitempty" yaml:"probe,omitempty"`
+	Dialects    []string                `json:"dialects,omitempty" yaml:"dialects,omitempty"`
+	Tags        []string                `json:"tags,omitempty" yaml:"tags,omitempty"`
+	Status      string                  `json:"status" yaml:"status"`
+	DurationMs  int64                   `json:"duration_ms" yaml:"duration_ms"`
+	Fingerprint *Fingerprint            `json:"fingerprint,omitempty" yaml:"fingerprint,omitempty"`
+	Message     string                  `json:"message,omitempty" yaml:"message,omitempty"`
+	Remediation *findings.Remediation   `json:"remediation,omitempty" yaml:"remediation,omitempty"`
+	SkipReason  string                  `json:"skip_reason,omitempty" yaml:"skip_reason,omitempty"`
+	Error       string                  `json:"error,omitempty" yaml:"error,omitempty"`
+	Suppression *findings.Suppression   `json:"suppression,omitempty" yaml:"suppression,omitempty"`
+	Baseline    *findings.BaselineMatch `json:"baseline,omitempty" yaml:"baseline,omitempty"`
+}
+
+// Fingerprint is the stable identity of a failing finding across
+// scans. Emitted only on failing rows (engine.RuleStatusFail) so a
+// downstream dedupe pipeline keys on the wire-level shape rather
+// than parsing the (rule_id, dialect, target) tuple back out of
+// rule_id + cluster.dialect. The shape mirrors
+// baseline.Fingerprint and is the schema-1 contract for finding
+// identity; target is reserved for the future and omitted today.
+type Fingerprint struct {
+	RuleID  string `json:"rule_id" yaml:"rule_id"`
+	Dialect string `json:"dialect" yaml:"dialect"`
+	Target  string `json:"target,omitempty" yaml:"target,omitempty"`
 }
 
 // BuildDocument converts the engine's per-rule results into the wire
@@ -170,11 +188,12 @@ func formatStartedAt(t time.Time) string {
 func buildSummary(results []engine.RuleResult) Summary {
 	c := classify(results)
 	return Summary{
-		Passed:  c.passed,
-		Failed:  c.critical + c.error + c.warn + c.info,
-		Skipped: c.skipped,
-		Errored: c.errored,
-		Waived:  c.waived,
+		Passed:    c.passed,
+		Failed:    c.critical + c.error + c.warn + c.info,
+		Skipped:   c.skipped,
+		Errored:   c.errored,
+		Waived:    c.waived,
+		Baselined: c.baselined,
 		BySeverity: SeverityCounts{
 			Critical: c.critical,
 			Error:    c.error,
@@ -221,6 +240,10 @@ func toResult(r engine.RuleResult) Result {
 		if r.Finding != nil {
 			out.Severity = r.Finding.Severity.String()
 			out.Message = r.Finding.Message
+			out.Fingerprint = &Fingerprint{
+				RuleID:  r.Finding.RuleID,
+				Dialect: r.Finding.Dialect,
+			}
 			if rem := r.Finding.Remediation; rem.Command != "" || rem.DocURL != "" || len(rem.EsopsCommands) > 0 {
 				rcopy := rem
 				out.Remediation = &rcopy
@@ -228,6 +251,10 @@ func toResult(r engine.RuleResult) Result {
 			if sup := r.Finding.Suppression; sup != nil {
 				scopy := *sup
 				out.Suppression = &scopy
+			}
+			if b := r.Finding.Baseline; b != nil {
+				bcopy := *b
+				out.Baseline = &bcopy
 			}
 		}
 	case engine.RuleStatusSkipped:
