@@ -119,7 +119,7 @@ type scanClusterInfo struct {
 // is — explain-finding doesn't need a transitive coupling to the
 // report package's struct shape.
 type fleetDocument struct {
-	SchemaVersion int              `json:"schema_version"`
+	SchemaVersion int                 `json:"schema_version"`
 	Clusters      []fleetClusterEntry `json:"clusters"`
 }
 

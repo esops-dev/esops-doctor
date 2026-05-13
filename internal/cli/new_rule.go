@@ -142,12 +142,17 @@ func runNewRule(_ context.Context, cmd *cli.Command, stdout io.Writer) error {
 		return fmt.Errorf("writing fixture scaffold %q: %w", fixturePath, err)
 	}
 
-	fmt.Fprintf(stdout, "wrote rule:    %s\n", rulePath)
-	fmt.Fprintf(stdout, "wrote fixture: %s\n", fixturePath)
-	fmt.Fprintf(stdout, "\nNext steps:\n")
-	fmt.Fprintf(stdout, "  1. Edit %s and replace the TODO blocks (condition, message, remediation).\n", rulePath)
-	fmt.Fprintf(stdout, "  2. Edit %s and fill in passing/failing fixture data.\n", fixturePath)
-	fmt.Fprintf(stdout, "  3. Run `make test` to validate the new rule.\n")
+	// One Fprintf for the whole next-steps block so the error is
+	// checked once rather than six times. Stdout writes generally
+	// don't fail, but errcheck won't accept "generally"; one
+	// shared check keeps the call site readable.
+	if _, err := fmt.Fprintf(stdout, "wrote rule:    %s\nwrote fixture: %s\n\nNext steps:\n"+
+		"  1. Edit %s and replace the TODO blocks (condition, message, remediation).\n"+
+		"  2. Edit %s and fill in passing/failing fixture data.\n"+
+		"  3. Run `make test` to validate the new rule.\n",
+		rulePath, fixturePath, rulePath, fixturePath); err != nil {
+		return fmt.Errorf("writing scaffold summary: %w", err)
+	}
 	return nil
 }
 

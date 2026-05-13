@@ -226,15 +226,23 @@ func renderResolvedConfigText(w io.Writer, doc resolvedConfig) error {
 		b.WriteString("  config_file:     (none — using built-in defaults)\n")
 	}
 	if doc.CurrentContext != "" {
-		b.WriteString(fmt.Sprintf("  current_context: %s (source: %s)\n", doc.CurrentContext, doc.ContextSource))
+		if _, err := fmt.Fprintf(&b, "  current_context: %s (source: %s)\n", doc.CurrentContext, doc.ContextSource); err != nil {
+			return err
+		}
 	} else {
-		b.WriteString(fmt.Sprintf("  current_context: (unset; source: %s)\n", doc.ContextSource))
+		if _, err := fmt.Fprintf(&b, "  current_context: (unset; source: %s)\n", doc.ContextSource); err != nil {
+			return err
+		}
 	}
 	if doc.SelectedAuth != nil {
-		b.WriteString(fmt.Sprintf("  selected:        %s -> %s\n", doc.SelectedAuth.Name, doc.SelectedAuth.URL))
+		if _, err := fmt.Fprintf(&b, "  selected:        %s -> %s\n", doc.SelectedAuth.Name, doc.SelectedAuth.URL); err != nil {
+			return err
+		}
 	}
 	if doc.ResolutionError != "" {
-		b.WriteString(fmt.Sprintf("  resolution_error: %s\n", doc.ResolutionError))
+		if _, err := fmt.Fprintf(&b, "  resolution_error: %s\n", doc.ResolutionError); err != nil {
+			return err
+		}
 	}
 
 	b.WriteString("\nDefaults:\n")
@@ -256,7 +264,9 @@ func renderResolvedConfigText(w io.Writer, doc resolvedConfig) error {
 	if len(doc.Contexts) == 0 {
 		b.WriteString("\nContexts: (none defined)\n")
 	} else {
-		b.WriteString(fmt.Sprintf("\nContexts (%d):\n", len(doc.Contexts)))
+		if _, err := fmt.Fprintf(&b, "\nContexts (%d):\n", len(doc.Contexts)); err != nil {
+			return err
+		}
 		tw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 		if _, err := fmt.Fprintln(tw, "  NAME\tURL\tAUTH\tPROTECTION\tCURRENT"); err != nil {
 			return err
