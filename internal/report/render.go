@@ -17,9 +17,18 @@ import (
 //     and errored rows always survive — those are what an operator must
 //     see. Summary counts always reflect the full result set. Wired to
 //     --quiet (which also lowers the slog level via the logging init).
+//   - IncludePassed: surface passing rules in the per-rule output. By
+//     default the table renderer drops pass rows (the summary footer
+//     carries the count); operators who want a "what was checked"
+//     report on stdout flip this on with --include-passed.
+//   - Color: emit ANSI escapes on severity tokens in the table
+//     renderer. Resolved upstream by ResolveColorEnabled so the
+//     report package never reads the environment itself.
 type Options struct {
-	SummaryOnly bool
-	Quiet       bool
+	SummaryOnly   bool
+	Quiet         bool
+	IncludePassed bool
+	Color         bool
 }
 
 // Render dispatches to the format-specific renderer. format is the
@@ -30,9 +39,9 @@ type Options struct {
 func Render(format string, w io.Writer, h Header, results []engine.RuleResult, opts Options) error {
 	switch strings.ToLower(format) {
 	case "", "table":
-		// Options and TableOptions have identical fields — convert
-		// directly so a future field addition only needs to land in
-		// one struct (staticcheck S1016).
+		// Options and TableOptions are field-for-field identical;
+		// convert directly so a future field addition only needs to
+		// land in one struct (staticcheck S1016).
 		return Table(w, h, results, TableOptions(opts))
 	case "json":
 		return JSON(w, h, results, opts)

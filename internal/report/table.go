@@ -56,9 +56,17 @@ type Header struct {
 //     since operator-facing severity events are not "noise". Wired to
 //     --quiet (which also lowers the slog level — that part lives in
 //     the logging init, not here).
+//   - IncludePassed: emit a "passed (N)" section listing the rules
+//     that ran cleanly. Off by default — operators who want a human
+//     "what was checked" report flip it on with --include-passed.
+//   - Color: tint severity tokens with ANSI escapes. Resolved at the
+//     cli boundary against --no-color and NO_COLOR / CLICOLOR /
+//     CLICOLOR_FORCE so the report package never reads the env itself.
 type TableOptions struct {
-	SummaryOnly bool
-	Quiet       bool
+	SummaryOnly   bool
+	Quiet         bool
+	IncludePassed bool
+	Color         bool
 }
 
 // Table writes the report. The header carries the cluster identity and
@@ -68,7 +76,7 @@ func Table(w io.Writer, h Header, results []engine.RuleResult, opts TableOptions
 	counts := classify(results)
 
 	if !opts.SummaryOnly {
-		if err := writeFindings(w, h.Dialect, results); err != nil {
+		if err := writeFindings(w, h.Dialect, results, opts.Color); err != nil {
 			return err
 		}
 		if err := writeEsopsHints(w, results); err != nil {
@@ -77,8 +85,13 @@ func Table(w io.Writer, h Header, results []engine.RuleResult, opts TableOptions
 		if err := writeWaived(w, results); err != nil {
 			return err
 		}
-		if err := writeBaselined(w, results); err != nil {
+		if err := writeBaselined(w, results, opts.Color); err != nil {
 			return err
+		}
+		if opts.IncludePassed {
+			if err := writePassed(w, results); err != nil {
+				return err
+			}
 		}
 		if !opts.Quiet {
 			if err := writeSkipped(w, results); err != nil {
@@ -102,7 +115,7 @@ func Table(w io.Writer, h Header, results []engine.RuleResult, opts TableOptions
 // match an operator-supplied baseline render here so a brownfield CI
 // gate sees both "these were known" and "these are new" in the same
 // report.
-func writeBaselined(w io.Writer, results []engine.RuleResult) error {
+func writeBaselined(w io.Writer, results []engine.RuleResult, color bool) error {
 	var rows []engine.RuleResult
 	for _, r := range results {
 		if r.Status == engine.RuleStatusFail && isBaselined(r.Finding) && !isActiveWaiver(r.Finding) {
@@ -127,7 +140,36 @@ func writeBaselined(w io.Writer, results []engine.RuleResult) error {
 			src = f.Baseline.Source
 		}
 		if _, err := fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\n",
-			sev, f.RuleID, src, oneLine(f.Message)); err != nil {
+			colorize(sev, f.Severity, color), f.RuleID, src, oneLine(f.Message)); err != nil {
+			return err
+		}
+	}
+	return tw.Flush()
+}
+
+// writePassed emits the per-passed-rule section. Off by default; the
+// scan command's --include-passed flag flips it on so an operator can
+// see a "what was checked" report alongside the failure rows. The
+// summary footer always carries the passed count regardless.
+func writePassed(w io.Writer, results []engine.RuleResult) error {
+	var rows []engine.RuleResult
+	for _, r := range results {
+		if r.Status == engine.RuleStatusPass {
+			rows = append(rows, r)
+		}
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w, "\npassed (%d):\n", len(rows)); err != nil {
+		return err
+	}
+	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	for _, r := range rows {
+		category := r.Rule.Category
+		name := r.Rule.Name
+		if _, err := fmt.Fprintf(tw, "  %s\t%s\t%s\n",
+			r.RuleID, category, oneLine(name)); err != nil {
 			return err
 		}
 	}
@@ -266,7 +308,7 @@ func MaxFailingSeverity(results []engine.RuleResult) findings.Severity {
 // failure stays loud. Baseline-matched findings are excluded — they
 // render in their own section so a brownfield-baseline report stays
 // readable.
-func writeFindings(w io.Writer, dialect string, results []engine.RuleResult) error {
+func writeFindings(w io.Writer, dialect string, results []engine.RuleResult, color bool) error {
 	var fails []engine.RuleResult
 	for _, r := range results {
 		if r.Status == engine.RuleStatusFail && !isActiveWaiver(r.Finding) && !isBaselined(r.Finding) {
@@ -288,7 +330,7 @@ func writeFindings(w io.Writer, dialect string, results []engine.RuleResult) err
 		if sev == "" {
 			sev = "?"
 		}
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", sev, f.RuleID, f.Category, oneLine(f.Message)); err != nil {
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", colorize(sev, f.Severity, color), f.RuleID, f.Category, oneLine(f.Message)); err != nil {
 			return err
 		}
 	}

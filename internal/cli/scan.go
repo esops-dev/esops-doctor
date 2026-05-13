@@ -93,10 +93,6 @@ func scanCommand() *cli.Command {
 				Name:  "waivers",
 				Usage: "Path to a waivers YAML file (default: .esops-doctor.yaml in cwd or user config)",
 			},
-			&cli.BoolFlag{
-				Name:  "cluster-waivers",
-				Usage: "Also read suppressions from the .esops-doctor-waivers index (not yet implementable: pkg/client lacks document-read capability)",
-			},
 			&cli.StringSliceFlag{
 				Name:  "targets",
 				Usage: "Multi-cluster fan-out: comma-separated context names from the esops config (repeatable)",
@@ -109,6 +105,15 @@ func scanCommand() *cli.Command {
 				Name:  "scan-timeout",
 				Value: defaultScanTimeout,
 				Usage: "Per-cluster ceiling on prefetch + evaluate (0 disables; per-request timeouts still apply)",
+			},
+			&cli.IntFlag{
+				Name:  "prefetch-concurrency",
+				Value: 0,
+				Usage: "In-flight probe-fetch cap during prefetch (0 = engine default; raise on roomy clusters, lower on slow links)",
+			},
+			&cli.BoolFlag{
+				Name:  "include-passed",
+				Usage: "Include passing rules in the per-rule output (default: passed rows are suppressed; only the summary count carries them)",
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -145,18 +150,6 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 		return exit.Usage("%s", err.Error())
 	}
 
-	if cmd.Bool("cluster-waivers") {
-		// Doctor's read-only-by-construction model forbids reaching
-		// around pkg/client to read cluster documents directly. The
-		// upstream document-read capability now exists; wiring it
-		// through into a cluster-side waiver source is its own
-		// milestone. Until then the flag's name stays reserved and
-		// discoverable, and operators get a clear "not yet" rather
-		// than a silent no-op.
-		return exit.Usage("--cluster-waivers is documented but not yet implemented; " +
-			"file-based waivers via --waivers are wired and ready")
-	}
-
 	defaults := defaultsFrom(ctx)
 	format, err := resolveOutput(cmd, defaults.Output)
 	if err != nil {
@@ -166,6 +159,11 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 	scanTimeout := cmd.Duration("scan-timeout")
 	if scanTimeout < 0 {
 		return exit.Usage("--scan-timeout cannot be negative (got %s); pass 0 to disable", scanTimeout)
+	}
+
+	prefetchConcurrency := cmd.Int("prefetch-concurrency")
+	if prefetchConcurrency < 0 {
+		return exit.Usage("--prefetch-concurrency cannot be negative (got %d); pass 0 to use the engine default", prefetchConcurrency)
 	}
 
 	multiTargets, isMulti, err := resolveMultiTargets(cmd)
@@ -184,12 +182,14 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 	}
 
 	opts := report.Options{
-		SummaryOnly: cmd.Bool("summary-only"),
-		Quiet:       cmd.Bool("quiet"),
+		SummaryOnly:   cmd.Bool("summary-only"),
+		Quiet:         cmd.Bool("quiet"),
+		IncludePassed: cmd.Bool("include-passed"),
+		Color:         resolveColorEnabled(cmd, stdout),
 	}
 
 	if isMulti {
-		return runMultiClusterScan(ctx, stdout, format, opts, failOn, eng, waiverSet, baselineSet, multiTargets, scanTimeout)
+		return runMultiClusterScan(ctx, stdout, format, opts, failOn, eng, waiverSet, baselineSet, multiTargets, scanTimeout, prefetchConcurrency)
 	}
 
 	ctxCfg, err := resolveTargetContext(cmd)
@@ -200,7 +200,7 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 
 	scanCtx, cancel := scanContext(ctx, scanTimeout)
 	defer cancel()
-	outcome := scanOneCluster(scanCtx, eng, waiverSet, baselineSet, target)
+	outcome := scanOneCluster(scanCtx, eng, waiverSet, baselineSet, target, prefetchConcurrency)
 	if outcome.connectErr != nil {
 		return outcome.connectErr
 	}
@@ -284,8 +284,11 @@ type clusterOutcome struct {
 // whether the output is single-cluster (existing behaviour) or one
 // block in a multi-cluster report.
 //
+// prefetchConcurrency caps in-flight probe fetches during the prefetch
+// phase. 0 lets the engine pick its default (DefaultPrefetchConcurrency).
+//
 // The engine is reused across calls; nothing here mutates it.
-func scanOneCluster(ctx context.Context, eng *engine.Engine, waiverSet *waivers.Set, baselineSet *baseline.Set, target targetSpec) clusterOutcome {
+func scanOneCluster(ctx context.Context, eng *engine.Engine, waiverSet *waivers.Set, baselineSet *baseline.Set, target targetSpec, prefetchConcurrency int) clusterOutcome {
 	out := clusterOutcome{Label: target.Label}
 
 	// scanStart is the operator-facing "when the scan ran" timestamp:
@@ -322,8 +325,10 @@ func scanOneCluster(ctx context.Context, eng *engine.Engine, waiverSet *waivers.
 	// Pre-fetch every applicable probe in parallel so the engine can
 	// evaluate from cache rather than serialise round trips. Bounded
 	// concurrency (DefaultPrefetchConcurrency, currently 4) keeps the
-	// cluster from being hit too hard on slow links.
-	cache := eng.Prefetch(ctx, registry, dialect, 0)
+	// cluster from being hit too hard on slow links. The operator can
+	// override the cap via --prefetch-concurrency on slow links or
+	// roomy clusters; 0 means "use the engine default".
+	cache := eng.Prefetch(ctx, registry, dialect, prefetchConcurrency)
 	results := eng.EvaluateWithCache(ctx, registry, dialect, cache)
 	duration := time.Since(evalStart)
 
