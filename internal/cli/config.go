@@ -20,6 +20,7 @@ func configCommand() *cli.Command {
 			getContextsCommand(),
 			useContextCommand(),
 			configViewCommand(),
+			configShowCommand(),
 		},
 	}
 }

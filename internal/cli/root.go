@@ -52,8 +52,11 @@ func newRoot() *cli.Command {
 			explainCommand(),
 			validateRulesCommand(),
 			newProfileCommand(),
+			newRuleCommand(),
 			diffCommand(),
 			configCommand(),
+			probeCommand(),
+			explainFindingCommand(),
 			versionCommand(),
 		},
 	}
@@ -115,6 +118,10 @@ func globalFlags() []cli.Flag {
 		&cli.StringFlag{
 			Name:  "log-file",
 			Usage: "Append log lines to PATH instead of stderr (file created with mode 0600; overrides defaults.log_file)",
+		},
+		&cli.BoolFlag{
+			Name:  "no-color",
+			Usage: "Disable ANSI escapes in table output (also honoured: NO_COLOR; CLICOLOR=0; CLICOLOR_FORCE overrides)",
 		},
 	}
 }

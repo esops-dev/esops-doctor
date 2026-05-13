@@ -44,6 +44,7 @@ func runMultiClusterScan(
 	baselineSet *baseline.Set,
 	targets []targetSpec,
 	scanTimeout time.Duration,
+	prefetchConcurrency int,
 ) error {
 	logging.Logger().Info("doctor.scan.multicluster.start", "count", len(targets))
 
@@ -60,7 +61,7 @@ func runMultiClusterScan(
 		// defer — deferring inside a loop would accumulate cancel
 		// closures across every cluster.
 		scanCtx, cancel := scanContext(ctx, scanTimeout)
-		out := scanOneCluster(scanCtx, eng, waiverSet, baselineSet, t)
+		out := scanOneCluster(scanCtx, eng, waiverSet, baselineSet, t, prefetchConcurrency)
 		cancel()
 		if out.connectErr != nil {
 			logging.Logger().Warn("doctor.scan.multicluster.connect_failed",
