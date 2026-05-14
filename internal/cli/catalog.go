@@ -15,9 +15,9 @@ import (
 
 // loadLayeredCatalog returns the rule catalog every operator-facing
 // command runs against: the embedded core, layered with --rules-dir
-// (when set) and the user rules.d directory (when present), then
-// validated as a whole. Loading order is embedded → --rules-dir →
-// user dir.
+// (when set), the optional signed --rules-pack (when set), and the
+// user rules.d directory (when present), then validated as a whole.
+// Loading order is embedded → --rules-dir → --rules-pack → user dir.
 //
 // Same-ID collisions across layers shadow the lower layer: a rule in
 // --rules-dir or the user rules.d with the same ID as an embedded rule
@@ -28,7 +28,11 @@ import (
 // Errors are wrapped with exit.Catalog so the binary maps to exit 21,
 // the documented "rule catalog error" code.
 func loadLayeredCatalog(rulesDir string) (*rules.Catalog, error) {
-	cat, err := assembleLayeredCatalog(rulesDir)
+	return loadLayeredCatalogWithPack(rulesDir, "")
+}
+
+func loadLayeredCatalogWithPack(rulesDir, rulesPack string) (*rules.Catalog, error) {
+	cat, err := assembleLayeredCatalogWithPack(rulesDir, rulesPack)
 	if err != nil {
 		return nil, err
 	}
@@ -44,12 +48,13 @@ func loadLayeredCatalog(rulesDir string) (*rules.Catalog, error) {
 	return cat, nil
 }
 
-// assembleLayeredCatalog builds the layered catalog without validating.
-// Split from loadLayeredCatalog so validate-rules can keep its per-issue
-// stderr UX (each violation on its own line, distinct from the bundled
-// "rule catalog invalid:" message scan/list-rules/explain emit). Both
-// callers see the same input: embedded → --rules-dir → user rules.d.
-func assembleLayeredCatalog(rulesDir string) (*rules.Catalog, error) {
+// assembleLayeredCatalogWithPack builds the layered catalog without
+// validating. Split from loadLayeredCatalogWithPack so validate-rules
+// can keep its per-issue stderr UX (each violation on its own line,
+// distinct from the bundled "rule catalog invalid:" message
+// scan/list-rules/explain emit). Both callers see the same input:
+// embedded → --rules-dir → --rules-pack → user rules.d.
+func assembleLayeredCatalogWithPack(rulesDir, rulesPack string) (*rules.Catalog, error) {
 	cat, err := rules.LoadEmbedded()
 	if err != nil {
 		return nil, exit.Catalog("loading embedded rules: %s", err)
@@ -60,6 +65,13 @@ func assembleLayeredCatalog(rulesDir string) (*rules.Catalog, error) {
 			return nil, exit.Catalog("%s", err)
 		}
 		cat = mergeWithOverride(cat, extra, rulesDir)
+	}
+	if rulesPack != "" {
+		extra, err := loadRulesPack(rulesPack)
+		if err != nil {
+			return nil, err
+		}
+		cat = mergeWithOverride(cat, extra, rulesPack)
 	}
 	if userDir, ok := userRulesDir(); ok {
 		extra, err := loadUserRulesDir(userDir)

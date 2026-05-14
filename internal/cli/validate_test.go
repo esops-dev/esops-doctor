@@ -15,7 +15,7 @@ import (
 
 func TestValidateRulesEmbeddedHappyPath(t *testing.T) {
 	var out, errOut bytes.Buffer
-	if err := runValidateRules(&out, &errOut, ""); err != nil {
+	if err := runValidateRules(&out, &errOut, "", "", false, ""); err != nil {
 		t.Fatalf("runValidateRules: %v", err)
 	}
 	if !strings.HasPrefix(out.String(), "OK:") {
@@ -43,7 +43,7 @@ func TestValidateRulesAcceptsValidExtraDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out, errOut bytes.Buffer
-	if err := runValidateRules(&out, &errOut, dir); err != nil {
+	if err := runValidateRules(&out, &errOut, dir, "", false, ""); err != nil {
 		t.Fatalf("runValidateRules: %v", err)
 	}
 	if !strings.Contains(out.String(), "OK:") {
@@ -68,7 +68,7 @@ func TestValidateRulesRejectsBadExtraDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out, errOut bytes.Buffer
-	err := runValidateRules(&out, &errOut, dir)
+	err := runValidateRules(&out, &errOut, dir, "", false, "")
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -87,7 +87,7 @@ func TestValidateRulesRejectsBadExtraDir(t *testing.T) {
 func TestValidateRulesMissingDir(t *testing.T) {
 	var out, errOut bytes.Buffer
 	missing := filepath.Join(t.TempDir(), "does-not-exist")
-	err := runValidateRules(&out, &errOut, missing)
+	err := runValidateRules(&out, &errOut, missing, "", false, "")
 	if err == nil {
 		t.Fatal("expected error for missing dir")
 	}
@@ -129,7 +129,7 @@ func TestValidateRulesRejectsBadCEL(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out, errOut bytes.Buffer
-	err := runValidateRules(&out, &errOut, dir)
+	err := runValidateRules(&out, &errOut, dir, "", false, "")
 	if err == nil {
 		t.Fatal("expected CEL compile error to surface")
 	}
@@ -160,7 +160,7 @@ func TestValidateRulesSkipsCELOnSchemaErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out, errOut bytes.Buffer
-	if err := runValidateRules(&out, &errOut, dir); err == nil {
+	if err := runValidateRules(&out, &errOut, dir, "", false, ""); err == nil {
 		t.Fatal("expected error")
 	}
 	if strings.Contains(errOut.String(), "CEL:") {
@@ -193,7 +193,7 @@ func TestValidateRulesRejectsUnknownProbe(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out, errOut bytes.Buffer
-	err := runValidateRules(&out, &errOut, dir)
+	err := runValidateRules(&out, &errOut, dir, "", false, "")
 	if err == nil {
 		t.Fatal("expected unknown-probe error to surface")
 	}
@@ -229,7 +229,7 @@ func TestValidateRulesLayersUserRulesDir(t *testing.T) {
 	// count grew by exactly one rather than hard-coding a number that
 	// rots every time the embedded catalog grows.
 	var baseOut, baseErr bytes.Buffer
-	if err := runValidateRules(&baseOut, &baseErr, ""); err != nil {
+	if err := runValidateRules(&baseOut, &baseErr, "", "", false, ""); err != nil {
 		t.Fatalf("runValidateRules baseline: %v", err)
 	}
 	baseN := parseValidatedCount(t, baseOut.String())
@@ -250,7 +250,7 @@ func TestValidateRulesLayersUserRulesDir(t *testing.T) {
 	}
 
 	var out, errOut bytes.Buffer
-	if err := runValidateRules(&out, &errOut, ""); err != nil {
+	if err := runValidateRules(&out, &errOut, "", "", false, ""); err != nil {
 		t.Fatalf("runValidateRules: %v", err)
 	}
 	if !strings.Contains(out.String(), "OK:") {
@@ -311,7 +311,7 @@ func TestValidateRulesSurfacesUserDirIssues(t *testing.T) {
 	}
 
 	var out, errOut bytes.Buffer
-	err := runValidateRules(&out, &errOut, "")
+	err := runValidateRules(&out, &errOut, "", "", false, "")
 	if err == nil {
 		t.Fatal("expected validation error from malformed user-dir rule")
 	}
@@ -330,5 +330,66 @@ func TestValidateRulesEndToEnd(t *testing.T) {
 	// to os.Stdout under this path; we just want to confirm it exits 0.
 	if err := Run(context.Background(), []string{"esops-doctor", "validate-rules"}); err != nil {
 		t.Errorf("Run(validate-rules): %v", err)
+	}
+}
+
+func TestValidateRulesStrictPassesAgainstRepoFixtures(t *testing.T) {
+	// Running --strict against the repo's own testdata tree should
+	// succeed — that's the same gate TestEveryRuleHasFixtures enforces.
+	fixtures := filepath.Join("..", "..", "testdata", "rule_fixtures")
+	var out, errOut bytes.Buffer
+	if err := runValidateRules(&out, &errOut, "", "", true, fixtures); err != nil {
+		t.Fatalf("runValidateRules --strict: %v\nstderr=%s", err, errOut.String())
+	}
+	if !strings.HasPrefix(out.String(), "OK:") {
+		t.Errorf("expected OK; got stdout=%q stderr=%q", out.String(), errOut.String())
+	}
+}
+
+func TestValidateRulesStrictRejectsMissingFixtures(t *testing.T) {
+	// Point --strict at a directory that has no fixtures for the
+	// embedded rules. Every embedded rule should surface as a
+	// missing-fixture issue; without --strict the catalog itself
+	// remains valid.
+	emptyDir := t.TempDir()
+	var out, errOut bytes.Buffer
+	err := runValidateRules(&out, &errOut, "", "", true, emptyDir)
+	if err == nil {
+		t.Fatal("expected --strict to fail without fixtures")
+	}
+	if !errors.Is(err, exit.ErrCatalog) {
+		t.Errorf("err should be ErrCatalog; got %v", err)
+	}
+	if !strings.Contains(errOut.String(), "missing fixture") {
+		t.Errorf("stderr should mention missing fixture; got %q", errOut.String())
+	}
+}
+
+func TestValidateRulesStrictSkipsRulesDirRules(t *testing.T) {
+	// --rules-dir rules are NOT in the doctor repo's testdata tree, so
+	// --strict skips them (the catalog-hygiene gate covers the embedded
+	// catalog only — operator packs ship their own fixtures, if any).
+	rulesDir := t.TempDir()
+	body := []byte(`checks:
+  - id: extras_pack_rule
+    name: Extras pack rule
+    category: extras
+    severity: info
+    description: Layered rule with no fixture in the repo testdata tree.
+    probe: nodes
+    condition: "true"
+    message: m
+    dialects: [elasticsearch, opensearch]
+`)
+	if err := os.WriteFile(filepath.Join(rulesDir, "extras.yaml"), body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	repoFixtures := filepath.Join("..", "..", "testdata", "rule_fixtures")
+	if err := runValidateRules(&out, &errOut, rulesDir, "", true, repoFixtures); err != nil {
+		t.Fatalf("runValidateRules: %v\nstderr=%s", err, errOut.String())
+	}
+	if !strings.HasPrefix(out.String(), "OK:") {
+		t.Errorf("expected OK; got stdout=%q stderr=%q", out.String(), errOut.String())
 	}
 }

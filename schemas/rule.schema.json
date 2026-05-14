@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://esops.dev/schemas/esops-doctor/rule.schema.json",
+  "title": "esops-doctor rule catalog",
+  "description": "Top-level shape of a rule YAML file consumed by the embedded catalog, --rules-dir, and the user rules.d directory. A single file may declare one or more checks under the `checks:` sequence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["checks"],
+  "properties": {
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/rule" }
+    }
+  },
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "category",
+        "severity",
+        "description",
+        "probe",
+        "condition",
+        "message",
+        "dialects"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "Stable rule identifier. Referenced verbatim by waivers, --rule-id, severity overrides."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable rule name (one short phrase, sentence-cased)."
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Grouping label such as resource_sanity, security, lifecycle, mappings, hygiene."
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["info", "warn", "error", "critical"],
+          "description": "Severity level driving the --fail-on gate."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Multi-line description shown by `esops-doctor explain` and rendered in `docs rules`."
+        },
+        "probe": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Registered probe name; resolves through internal/probes at scan time."
+        },
+        "condition": {
+          "type": "string",
+          "minLength": 1,
+          "description": "CEL expression returning bool. Rule passes when the expression evaluates to true."
+        },
+        "count_expression": {
+          "type": "string",
+          "description": "Optional CEL expression returning int; substituted into the message's {{count}} placeholder."
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Failure message template. Supports {{count}} when count_expression is set or len(self) is meaningful."
+        },
+        "remediation": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "How an operator fixes the finding.",
+          "properties": {
+            "command": {
+              "type": "string",
+              "description": "Free-form instruction or shell snippet that fixes the finding."
+            },
+            "doc_url": {
+              "type": "string",
+              "format": "uri",
+              "description": "Upstream documentation URL."
+            },
+            "esops_commands": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^esops "
+              },
+              "description": "Concrete `esops` subcommands surfaced alongside the finding. Each entry must start with `esops `."
+            }
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Free-form labels for filtering. `framework:cis` / `framework:soc2` / `framework:pci` mark compliance-relevant rules."
+        },
+        "dialects": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "enum": ["elasticsearch", "opensearch"]
+          },
+          "description": "Cluster dialects the rule applies to. A rule whose declared dialect doesn't match the probed cluster is reported as skipped, not silently dropped."
+        },
+        "affected_versions": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Version markers the rule applies to (e.g. \"7.x\", \"8.x\"). Informational; the engine does not gate evaluation on them."
+        },
+        "effort": {
+          "type": "string",
+          "enum": ["", "low", "medium", "high"],
+          "description": "Operator-effort hint for prioritising fixes."
+        },
+        "deprecated_aliases": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "description": "Old rule IDs preserved for one minor version after a rename. Waivers and --rule-id still resolve through these."
+        }
+      }
+    }
+  }
+}
