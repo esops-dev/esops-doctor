@@ -2,7 +2,7 @@
 
 A **rule pack** is a directory of rule YAML files plus a `MANIFEST.yaml` that records the SHA-256 hash of every shipped rule. Doctor verifies the manifest at load time when an operator points it at the pack with `--rules-pack PATH`. Combined with a cosign signature on the manifest, this gives a downstream operator a supply-chain story for consuming someone else's catalog.
 
-The integrity check (manifest hashes vs. files) lives inside doctor; the **trust** check (who signed the manifest) lives in cosign. Doctor never imports the sigstore SDK — see [CLAUDE.md §4](../CLAUDE.md) for the dependency budget — so the cosign step is an operator-side wrap around the doctor invocation.
+The integrity check (manifest hashes vs. files) lives inside doctor; the **trust** check (who signed the manifest) lives in cosign.
 
 ---
 
