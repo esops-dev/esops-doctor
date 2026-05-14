@@ -71,6 +71,16 @@ bin-size: build ## Print stripped binary size; fail if it exceeds $(BIN_BUDGET_B
 		exit 1; \
 	fi
 
+.PHONY: docs
+docs: build ## Regenerate docs/rules-reference.md from the embedded catalog
+	@mkdir -p docs
+	./bin/$(BINARY) docs rules --output-file docs/rules-reference.md
+	@echo "wrote docs/rules-reference.md"
+
+.PHONY: schemas
+schemas: build ## Extract embedded JSON Schemas into ./schemas (idempotent)
+	./bin/$(BINARY) docs schemas --output-dir schemas
+
 .PHONY: tidy
 tidy:
 	go mod tidy

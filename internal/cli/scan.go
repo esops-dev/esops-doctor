@@ -77,6 +77,10 @@ func scanCommand() *cli.Command {
 				Name:  "rules-dir",
 				Usage: "Additional directory of rule YAML files layered over the embedded catalog and the user rules.d",
 			},
+			&cli.StringFlag{
+				Name:  "rules-pack",
+				Usage: "Directory of a signed rule pack (MANIFEST.yaml integrity-checked at load; verify the manifest's cosign signature yourself before pointing this at a third-party pack)",
+			},
 			&cli.StringSliceFlag{
 				Name:  "tags",
 				Usage: "Run only rules carrying at least one of these tags (repeatable or comma-separated)",
@@ -225,7 +229,7 @@ func runScan(ctx context.Context, cmd *cli.Command, stdout io.Writer) error {
 // — it carries no per-cluster state — so a multi-cluster scan compiles
 // once and prefetches/evaluates against each cluster in turn.
 func buildEngineAndWaivers(cmd *cli.Command) (*engine.Engine, *waivers.Set, error) {
-	fullCat, err := loadLayeredCatalog(cmd.String("rules-dir"))
+	fullCat, err := loadLayeredCatalogWithPack(cmd.String("rules-dir"), cmd.String("rules-pack"))
 	if err != nil {
 		return nil, nil, err
 	}

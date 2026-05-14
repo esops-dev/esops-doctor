@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://esops.dev/schemas/esops-doctor/profile.schema.json",
+  "title": "esops-doctor profile",
+  "description": "Shape of a scan profile YAML — applies rule selection and severity overrides on top of the catalog. Used by the embedded profiles, --profile-file, and the `new-profile` scaffolder.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Profile name. Referenced by --profile and printed in logs."
+    },
+    "description": {
+      "type": "string",
+      "description": "One-line description shown alongside the profile name."
+    },
+    "severity_overrides": {
+      "type": "object",
+      "description": "Rule-ID to severity rewrites applied after catalog load. Unknown rule IDs warn but do not fail the scan.",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["info", "warn", "error", "critical"]
+      }
+    },
+    "skip_tags": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Drop rules carrying any of these tags. Skip-tags win over include-tags so a profile can subtract from a tag-narrowed selection."
+    },
+    "include_tags": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Keep only rules carrying at least one of these tags. Empty = no constraint."
+    },
+    "rule_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "description": "Keep only rules whose canonical id appears in this list. Empty = no constraint."
+    }
+  }
+}

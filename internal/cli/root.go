@@ -57,6 +57,8 @@ func newRoot() *cli.Command {
 			configCommand(),
 			probeCommand(),
 			explainFindingCommand(),
+			docsCommand(),
+			rulesPackCommand(),
 			versionCommand(),
 		},
 	}
