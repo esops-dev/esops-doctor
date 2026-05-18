@@ -3,10 +3,10 @@ module github.com/esops-dev/esops-doctor
 go 1.26.3
 
 require (
-	github.com/esops-dev/esops-go v0.0.12
-	github.com/google/cel-go v0.28.0
+	github.com/esops-dev/esops-go v0.0.14
+	github.com/google/cel-go v0.28.1
 	github.com/testcontainers/testcontainers-go v0.42.0
-	github.com/urfave/cli/v3 v3.8.0
+	github.com/urfave/cli/v3 v3.9.0
 	go.yaml.in/yaml/v3 v3.0.4
 )
 
@@ -44,7 +44,7 @@ require (
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/ebitengine/purego v0.10.0 // indirect
 	github.com/elastic/elastic-transport-go/v8 v8.11.0 // indirect
-	github.com/elastic/go-elasticsearch/v9 v9.4.0 // indirect
+	github.com/elastic/go-elasticsearch/v9 v9.4.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
