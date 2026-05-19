@@ -1,0 +1,48 @@
+checks:
+  - id: segments_excessive_fragmentation
+    name: Indices with excessively fragmented shards
+    category: mappings
+    severity: warn
+    description: >
+      Lucene keeps one segment per refresh until merges catch up. A
+      shard with hundreds of segments slows down searches and burns
+      heap on segment metadata. Once an index has stopped receiving
+      writes (rotated time-series backings, sealed archives), it
+      should be force-merged down to a small number of segments. This
+      rule flags indices whose largest shard exceeds 50 segments,
+      independent of whether the index is a regular index or a
+      data-stream backing. Data-stream backings (`.ds-<stream>-<gen>`)
+      are intentionally surfaced like any other index — operators
+      who want to remediate at the stream level use
+      `esops datastream optimize`. True system indices (other
+      dot-prefixed names: `.security-*`, `.kibana-*`, `.async-search`,
+      etc.) are excluded because their merge cadence is managed by
+      the cluster.
+    probe: segments
+    condition: |
+      !has(self.indices) || size(self.indices) == 0 ||
+      self.indices.all(ix,
+        !has(ix.index) ||
+        (ix.index.startsWith('.') && !ix.index.startsWith('.ds-')) ||
+        !has(ix.max_segments_shard) ||
+        int(ix.max_segments_shard) <= 50
+      )
+    count_expression: |
+      has(self.indices) ?
+        size(self.indices.filter(ix,
+          has(ix.index) &&
+          (!ix.index.startsWith('.') || ix.index.startsWith('.ds-')) &&
+          has(ix.max_segments_shard) &&
+          int(ix.max_segments_shard) > 50
+        )) : 0
+    message: '{{count}} index/indices have a shard with more than 50 segments.'
+    remediation:
+      command: Force-merge rotated indices with `esops index optimize --index <pattern> --max-num-segments 1`; for data streams, prefer `esops datastream optimize --name <stream>` so backings rotate together
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-forcemerge.html
+      esops_commands:
+        - esops index optimize
+        - esops datastream optimize
+    tags: [prod, performance, hygiene, mappings]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: low

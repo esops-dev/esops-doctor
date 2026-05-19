@@ -48,6 +48,8 @@ severity_overrides:
   index_legacy_box_routing: warn
   ccr_lease_expiring: critical
   license_expiration: critical
+  segments_excessive_fragmentation: warn
+  segments_deleted_doc_ratio: info
 
 skip_tags: []
 include_tags: []

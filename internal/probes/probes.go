@@ -48,6 +48,7 @@ const (
 	Recovery             = "recovery"
 	RemoteClusters       = "remote_clusters"
 	SecurityAudit        = "security_audit"
+	Segments             = "segments"
 	ServiceTokens        = "service_tokens"
 	SnapshotRecency      = "snapshot_recency"
 	SnapshotRepositories = "snapshot_repositories"
@@ -89,6 +90,7 @@ var known = map[string]struct{}{
 	Recovery:             {},
 	RemoteClusters:       {},
 	SecurityAudit:        {},
+	Segments:             {},
 	ServiceTokens:        {},
 	SnapshotRecency:      {},
 	SnapshotRepositories: {},
@@ -263,6 +265,11 @@ func (r *Registry) dispatch(ctx context.Context, name string) (any, error) {
 			return nil, notConfigured(name)
 		}
 		return fetchRecovery(ctx, cl.Recovery)
+	case Segments:
+		if cl.Segments == nil {
+			return nil, notConfigured(name)
+		}
+		return fetchSegments(ctx, cl.Segments)
 	case ClusterSettings:
 		if cl.ClusterSettingsRead == nil {
 			return nil, notConfigured(name)

@@ -581,6 +581,35 @@ self.all(t, !has(t.source) || t.source != 'index' ||
 | `files_total` | int |  |
 | `files_recovered` | int |  |
 
+## segments
+
+`GET /_all/_segments` — per-index aggregate of Lucene segment counts and tombstones. **Single object.** Available on both Elasticsearch and OpenSearch.
+
+| Field | Type | Notes |
+|---|---|---|
+| `indices` | []object | One per index. Empty on a fresh cluster |
+
+`indices[]` entry:
+
+| Field | Type | Notes |
+|---|---|---|
+| `index` | string | Index name (data-stream backings appear as `.ds-<stream>-<gen>`) |
+| `shards` | int | Distinct shard slots reported (primary + replica copies) |
+| `segments_total` | int | Total segment records across every shard copy |
+| `segments_primary` | int | Segments counted on primary copies only — what matters for force-merge planning |
+| `docs_total` | int | Live docs summed across primaries (matches `/_cat/indices` `docs.count`) |
+| `docs_deleted` | int | Tombstoned docs summed across primaries (matches `docs.deleted`) |
+| `bytes` | int | On-disk size summed across primaries |
+| `max_segments_shard` | int | Largest segment count on any single shard copy — the fragmentation signal |
+| `committed` | int | Optional: number of committed segments (omitted when zero) |
+| `searchable` | int | Optional: number of searchable segments (omitted when zero) |
+
+```cel
+self.indices.all(ix,
+  int(ix.max_segments_shard) <= 50
+)
+```
+
 ## pending_tasks
 
 `/_cluster/pending_tasks` — master-side cluster-state queue. List of objects.

@@ -47,7 +47,7 @@ func TestKnownProbesAreSorted(t *testing.T) {
 	// Spot-check a couple of probe names to catch a registration that
 	// silently dropped them (the sort check above passes on an empty
 	// slice). Adjust as the registered set grows.
-	for _, name := range []string{Nodes, NodeStats, ClusterHealth, ClusterSettings, DeprecationLog, ILMState, ISMState, PendingTasks} {
+	for _, name := range []string{Nodes, NodeStats, ClusterHealth, ClusterSettings, DeprecationLog, ILMState, ISMState, PendingTasks, Segments} {
 		if !IsKnown(name) {
 			t.Errorf("IsKnown(%q) = false, want true", name)
 		}

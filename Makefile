@@ -38,6 +38,17 @@ test-integration: ## Run integration tests (build tag: integration; needs Docker
 	# OpenSearch via testcontainers — Docker must be reachable. Pin
 	# images via ESOPS_DOCTOR_TEST_ES_IMAGE / ESOPS_DOCTOR_TEST_OS_IMAGE
 	# to extend the matrix without touching the test source.
+	#
+	# Colima / Rancher Desktop note: testcontainers can't auto-detect the
+	# socket the way it does for Docker Desktop. Before running this
+	# target, export both:
+	#
+	#   export DOCKER_HOST="unix://$$HOME/.colima/default/docker.sock"
+	#   export TESTCONTAINERS_RYUK_DISABLED=true
+	#
+	# (Ryuk must be disabled because the reaper container would otherwise
+	# try to bind-mount the host's socket path into the VM, which fails
+	# under Colima.)
 	$(GO) test -race -count=1 -tags=integration ./...
 
 .PHONY: lint

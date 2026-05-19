@@ -91,6 +91,12 @@ func (f *fakeRecoveryInspector) Recovery(context.Context, types.RecoveryRequest)
 	return f.Result, nil
 }
 
+type fakeSegmentsInspector struct{ Result types.SegmentsReport }
+
+func (f *fakeSegmentsInspector) Segments(context.Context, types.SegmentsRequest) (types.SegmentsReport, error) {
+	return f.Result, nil
+}
+
 type fakeClusterSettingsInspector struct{ Result types.ClusterSettingsView }
 
 func (f *fakeClusterSettingsInspector) GetClusterSettings(context.Context) (types.ClusterSettingsView, error) {
@@ -306,6 +312,7 @@ func fullClient() *client.Client {
 		ISM:                 &fakeISM{},
 		Security:            &fakeSecurityAuditor{},
 		Recovery:            &fakeRecoveryInspector{},
+		Segments:            &fakeSegmentsInspector{},
 		ClusterSettingsRead: &fakeClusterSettingsInspector{},
 		PendingTasks:        &fakePendingTasksInspector{},
 		Deprecations:        &fakeDeprecationInspector{},

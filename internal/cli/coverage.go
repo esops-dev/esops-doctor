@@ -59,7 +59,7 @@ var coverageBuckets = []coverageBucket{
 	},
 	{
 		ID:          "mappings",
-		Description: "Dynamic mapping, unbounded keyword cardinality, deeply nested objects, missing index templates, deprecated field types, mapping drift",
+		Description: "Dynamic mapping, unbounded keyword cardinality, deeply nested objects, missing index templates, deprecated field types, mapping drift, segment hygiene",
 		Members: []string{
 			"dynamic_mapping_strict",
 			"unbounded_keyword_cardinality",
@@ -69,6 +69,8 @@ var coverageBuckets = []coverageBucket{
 			"template_no_index_patterns",
 			"deprecated_field_types",
 			"mapping_template_drift",
+			"segments_excessive_fragmentation",
+			"segments_deleted_doc_ratio",
 		},
 	},
 	{
