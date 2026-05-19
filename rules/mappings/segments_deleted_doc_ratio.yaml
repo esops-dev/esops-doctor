@@ -1,0 +1,50 @@
+checks:
+  - id: segments_deleted_doc_ratio
+    name: Indices with high deleted-doc ratio
+    category: mappings
+    severity: info
+    description: >
+      Lucene marks deletes as tombstones and reclaims the space at
+      merge time. An index whose deleted-doc ratio exceeds ~30% has
+      typically followed a delete-by-query sweep that did not trigger
+      enough natural merging; force-merge with --only-expunge-deletes
+      reclaims the space without rewriting clean segments. The 30%
+      threshold is conservative — high-write workloads churn through
+      tombstones routinely and would otherwise spam the report.
+      Data-stream backings (`.ds-<stream>-<gen>`) are intentionally
+      surfaced like any other index — operators who want to remediate
+      at the stream level use `esops datastream optimize`. True
+      system indices (other dot-prefixed names: `.security-*`,
+      `.kibana-*`, `.async-search`, etc.) are excluded.
+    probe: segments
+    condition: |
+      !has(self.indices) || size(self.indices) == 0 ||
+      self.indices.all(ix,
+        !has(ix.index) ||
+        (ix.index.startsWith('.') && !ix.index.startsWith('.ds-')) ||
+        !has(ix.docs_total) || !has(ix.docs_deleted) ||
+        (int(ix.docs_total) + int(ix.docs_deleted)) == 0 ||
+        double(ix.docs_deleted) /
+          double(int(ix.docs_total) + int(ix.docs_deleted)) <= 0.30
+      )
+    count_expression: |
+      has(self.indices) ?
+        size(self.indices.filter(ix,
+          has(ix.index) &&
+          (!ix.index.startsWith('.') || ix.index.startsWith('.ds-')) &&
+          has(ix.docs_total) && has(ix.docs_deleted) &&
+          (int(ix.docs_total) + int(ix.docs_deleted)) > 0 &&
+          double(ix.docs_deleted) /
+            double(int(ix.docs_total) + int(ix.docs_deleted)) > 0.30
+        )) : 0
+    message: '{{count}} index/indices carry more than 30% deleted docs.'
+    remediation:
+      command: Reclaim space with `esops index optimize --only-expunge-deletes --index <pattern>`; for data streams, `esops datastream optimize --name <stream> --only-expunge-deletes`
+      doc_url: https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-forcemerge.html
+      esops_commands:
+        - esops index optimize
+        - esops datastream optimize
+    tags: [hygiene, mappings]
+    dialects: [elasticsearch, opensearch]
+    affected_versions: ["7.x", "8.x", "9.x", "1.x", "2.x", "3.x"]
+    effort: low

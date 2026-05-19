@@ -2,7 +2,7 @@
 
 Generated from the embedded catalog by `esops-doctor docs rules`. Do not edit by hand — change the rule YAML and regenerate.
 
-Total rules: **67**.
+Total rules: **69**.
 
 ## Table of contents
 
@@ -10,7 +10,7 @@ Total rules: **67**.
 - [destructive_ops](#destructive-ops) — 3 rule(s)
 - [hygiene](#hygiene) — 10 rule(s)
 - [lifecycle](#lifecycle) — 11 rule(s)
-- [mappings](#mappings) — 8 rule(s)
+- [mappings](#mappings) — 10 rule(s)
 - [resource_sanity](#resource-sanity) — 16 rule(s)
 - [security](#security) — 16 rule(s)
 
@@ -1428,6 +1428,106 @@ size(self)
 - Doc: <https://www.elastic.co/guide/en/elasticsearch/reference/current/index-templates.html>
 - `esops index template`
 - `esops migrate reindex`
+
+---
+
+### `segments_deleted_doc_ratio`
+
+**Indices with high deleted-doc ratio**
+
+| Severity | Dialects | Effort | Tags |
+|---|---|---|---|
+| info | elasticsearch, opensearch | low | hygiene, mappings |
+
+Lucene marks deletes as tombstones and reclaims the space at merge time. An index whose deleted-doc ratio exceeds ~30% has typically followed a delete-by-query sweep that did not trigger enough natural merging; force-merge with --only-expunge-deletes reclaims the space without rewriting clean segments. The 30% threshold is conservative — high-write workloads churn through tombstones routinely and would otherwise spam the report. Data-stream backings (`.ds-<stream>-<gen>`) are intentionally surfaced like any other index — operators who want to remediate at the stream level use `esops datastream optimize`. True system indices (other dot-prefixed names: `.security-*`, `.kibana-*`, `.async-search`, etc.) are excluded.
+
+- **Probe:** `segments`
+- **Affected versions:** 7.x, 8.x, 9.x, 1.x, 2.x, 3.x
+
+**Condition (CEL):**
+
+```cel
+!has(self.indices) || size(self.indices) == 0 ||
+self.indices.all(ix,
+  !has(ix.index) ||
+  (ix.index.startsWith('.') && !ix.index.startsWith('.ds-')) ||
+  !has(ix.docs_total) || !has(ix.docs_deleted) ||
+  (int(ix.docs_total) + int(ix.docs_deleted)) == 0 ||
+  double(ix.docs_deleted) /
+    double(int(ix.docs_total) + int(ix.docs_deleted)) <= 0.30
+)
+```
+
+**Count expression (CEL):**
+
+```cel
+has(self.indices) ?
+  size(self.indices.filter(ix,
+    has(ix.index) &&
+    (!ix.index.startsWith('.') || ix.index.startsWith('.ds-')) &&
+    has(ix.docs_total) && has(ix.docs_deleted) &&
+    (int(ix.docs_total) + int(ix.docs_deleted)) > 0 &&
+    double(ix.docs_deleted) /
+      double(int(ix.docs_total) + int(ix.docs_deleted)) > 0.30
+  )) : 0
+```
+
+**Message template:** {{count}} index/indices carry more than 30% deleted docs.
+
+**Remediation:**
+
+- Command: Reclaim space with `esops index optimize --only-expunge-deletes --index <pattern>`; for data streams, `esops datastream optimize --name <stream> --only-expunge-deletes`
+- Doc: <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-forcemerge.html>
+- `esops index optimize`
+- `esops datastream optimize`
+
+---
+
+### `segments_excessive_fragmentation`
+
+**Indices with excessively fragmented shards**
+
+| Severity | Dialects | Effort | Tags |
+|---|---|---|---|
+| warn | elasticsearch, opensearch | low | prod, performance, hygiene, mappings |
+
+Lucene keeps one segment per refresh until merges catch up. A shard with hundreds of segments slows down searches and burns heap on segment metadata. Once an index has stopped receiving writes (rotated time-series backings, sealed archives), it should be force-merged down to a small number of segments. This rule flags indices whose largest shard exceeds 50 segments, independent of whether the index is a regular index or a data-stream backing. Data-stream backings (`.ds-<stream>-<gen>`) are intentionally surfaced like any other index — operators who want to remediate at the stream level use `esops datastream optimize`. True system indices (other dot-prefixed names: `.security-*`, `.kibana-*`, `.async-search`, etc.) are excluded because their merge cadence is managed by the cluster.
+
+- **Probe:** `segments`
+- **Affected versions:** 7.x, 8.x, 9.x, 1.x, 2.x, 3.x
+
+**Condition (CEL):**
+
+```cel
+!has(self.indices) || size(self.indices) == 0 ||
+self.indices.all(ix,
+  !has(ix.index) ||
+  (ix.index.startsWith('.') && !ix.index.startsWith('.ds-')) ||
+  !has(ix.max_segments_shard) ||
+  int(ix.max_segments_shard) <= 50
+)
+```
+
+**Count expression (CEL):**
+
+```cel
+has(self.indices) ?
+  size(self.indices.filter(ix,
+    has(ix.index) &&
+    (!ix.index.startsWith('.') || ix.index.startsWith('.ds-')) &&
+    has(ix.max_segments_shard) &&
+    int(ix.max_segments_shard) > 50
+  )) : 0
+```
+
+**Message template:** {{count}} index/indices have a shard with more than 50 segments.
+
+**Remediation:**
+
+- Command: Force-merge rotated indices with `esops index optimize --index <pattern> --max-num-segments 1`; for data streams, prefer `esops datastream optimize --name <stream>` so backings rotate together
+- Doc: <https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-forcemerge.html>
+- `esops index optimize`
+- `esops datastream optimize`
 
 ---
 

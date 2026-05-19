@@ -1,0 +1,168 @@
+rule: segments_excessive_fragmentation
+cases:
+  - name: no indices reported passes vacuously
+    expect: pass
+    data:
+      indices: []
+
+  - name: single index well under threshold passes
+    expect: pass
+    data:
+      indices:
+        - index: logs-2026-05
+          shards: 1
+          segments_total: 12
+          segments_primary: 6
+          docs_total: 1000
+          docs_deleted: 0
+          bytes: 1048576
+          max_segments_shard: 12
+
+  - name: many indices, all under threshold pass
+    expect: pass
+    data:
+      indices:
+        - index: logs-2026-05
+          shards: 3
+          segments_total: 90
+          segments_primary: 30
+          docs_total: 1000000
+          docs_deleted: 0
+          bytes: 10485760
+          max_segments_shard: 30
+        - index: metrics-2026-05
+          shards: 1
+          segments_total: 50
+          segments_primary: 50
+          docs_total: 500000
+          docs_deleted: 0
+          bytes: 5242880
+          max_segments_shard: 50
+
+  - name: boundary 50 segments on the largest shard passes (threshold is strictly greater)
+    expect: pass
+    data:
+      indices:
+        - index: logs-rotated-2026-04
+          shards: 1
+          segments_total: 50
+          segments_primary: 50
+          docs_total: 1000000
+          docs_deleted: 0
+          bytes: 10485760
+          max_segments_shard: 50
+
+  - name: system index over threshold is exempt
+    expect: pass
+    data:
+      indices:
+        - index: .security-7
+          shards: 1
+          segments_total: 200
+          segments_primary: 200
+          docs_total: 1000
+          docs_deleted: 0
+          bytes: 524288
+          max_segments_shard: 200
+
+  - name: other dot-prefixed system indices over threshold are exempt
+    expect: pass
+    data:
+      indices:
+        - index: .kibana_8.13.0_001
+          shards: 1
+          segments_total: 120
+          segments_primary: 120
+          docs_total: 500
+          docs_deleted: 0
+          bytes: 524288
+          max_segments_shard: 120
+        - index: .async-search
+          shards: 1
+          segments_total: 80
+          segments_primary: 80
+          docs_total: 100
+          docs_deleted: 0
+          bytes: 65536
+          max_segments_shard: 80
+
+  - name: datastream backing index over threshold flags
+    expect: fail
+    data:
+      indices:
+        - index: .ds-logs-app-2026.04.01-000042
+          shards: 1
+          segments_total: 200
+          segments_primary: 200
+          docs_total: 10000000
+          docs_deleted: 0
+          bytes: 1073741824
+          max_segments_shard: 200
+
+  - name: datastream backing at boundary 50 passes
+    expect: pass
+    data:
+      indices:
+        - index: .ds-logs-app-2026.04.01-000041
+          shards: 1
+          segments_total: 50
+          segments_primary: 50
+          docs_total: 1000000
+          docs_deleted: 0
+          bytes: 10485760
+          max_segments_shard: 50
+
+  - name: largest shard over threshold flags
+    expect: fail
+    data:
+      indices:
+        - index: logs-rotated-2026-04
+          shards: 1
+          segments_total: 51
+          segments_primary: 51
+          docs_total: 1000000
+          docs_deleted: 0
+          bytes: 10485760
+          max_segments_shard: 51
+
+  - name: one index in a list of many over threshold flags
+    expect: fail
+    data:
+      indices:
+        - index: logs-2026-05
+          shards: 1
+          segments_total: 20
+          segments_primary: 20
+          docs_total: 1000
+          docs_deleted: 0
+          bytes: 524288
+          max_segments_shard: 20
+        - index: .ds-logs-archive-2026.04.01-000007
+          shards: 1
+          segments_total: 30
+          segments_primary: 30
+          docs_total: 5000
+          docs_deleted: 0
+          bytes: 2097152
+          max_segments_shard: 30
+        - index: archive-2026-q1
+          shards: 2
+          segments_total: 240
+          segments_primary: 120
+          docs_total: 10000000
+          docs_deleted: 0
+          bytes: 104857600
+          max_segments_shard: 120
+
+  - name: heavily fragmented standalone index flags
+    expect: fail
+    data:
+      indices:
+        - index: snapshots-archive-2025
+          shards: 1
+          segments_total: 312
+          segments_primary: 312
+          docs_total: 25000000
+          docs_deleted: 0
+          bytes: 1073741824
+          max_segments_shard: 312

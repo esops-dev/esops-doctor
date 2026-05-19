@@ -1,0 +1,165 @@
+rule: segments_deleted_doc_ratio
+cases:
+  - name: no indices reported passes vacuously
+    expect: pass
+    data:
+      indices: []
+
+  - name: empty index (zero docs total + deleted) passes
+    expect: pass
+    data:
+      indices:
+        - index: logs-2026-05
+          shards: 1
+          segments_total: 0
+          segments_primary: 0
+          docs_total: 0
+          docs_deleted: 0
+          bytes: 0
+          max_segments_shard: 0
+
+  - name: no deletes passes
+    expect: pass
+    data:
+      indices:
+        - index: logs-2026-05
+          shards: 1
+          segments_total: 10
+          segments_primary: 10
+          docs_total: 1000000
+          docs_deleted: 0
+          bytes: 10485760
+          max_segments_shard: 10
+
+  - name: deletes well below threshold passes (10% ratio)
+    expect: pass
+    data:
+      indices:
+        - index: logs-2026-05
+          shards: 1
+          segments_total: 10
+          segments_primary: 10
+          docs_total: 900
+          docs_deleted: 100
+          bytes: 1048576
+          max_segments_shard: 10
+
+  - name: boundary 30% ratio exactly passes (threshold is strictly greater)
+    expect: pass
+    data:
+      indices:
+        - index: events-2026-05
+          shards: 1
+          segments_total: 10
+          segments_primary: 10
+          docs_total: 700
+          docs_deleted: 300
+          bytes: 1048576
+          max_segments_shard: 10
+
+  - name: true system index over threshold is exempt
+    expect: pass
+    data:
+      indices:
+        - index: .security-7
+          shards: 1
+          segments_total: 10
+          segments_primary: 10
+          docs_total: 100
+          docs_deleted: 900
+          bytes: 524288
+          max_segments_shard: 10
+
+  - name: other dot-prefixed system indices over threshold are exempt
+    expect: pass
+    data:
+      indices:
+        - index: .kibana_8.13.0_001
+          shards: 1
+          segments_total: 10
+          segments_primary: 10
+          docs_total: 100
+          docs_deleted: 900
+          bytes: 524288
+          max_segments_shard: 10
+        - index: .async-search
+          shards: 1
+          segments_total: 10
+          segments_primary: 10
+          docs_total: 50
+          docs_deleted: 950
+          bytes: 65536
+          max_segments_shard: 10
+
+  - name: datastream backing index over threshold flags
+    expect: fail
+    data:
+      indices:
+        - index: .ds-logs-app-2026.04.01-000042
+          shards: 1
+          segments_total: 10
+          segments_primary: 10
+          docs_total: 1000
+          docs_deleted: 2000
+          bytes: 524288
+          max_segments_shard: 10
+
+  - name: datastream backing at boundary 30 percent passes
+    expect: pass
+    data:
+      indices:
+        - index: .ds-logs-app-2026.04.01-000041
+          shards: 1
+          segments_total: 10
+          segments_primary: 10
+          docs_total: 700
+          docs_deleted: 300
+          bytes: 524288
+          max_segments_shard: 10
+
+  - name: ratio just over 30 percent flags
+    expect: fail
+    data:
+      indices:
+        - index: events-2026-04
+          shards: 1
+          segments_total: 10
+          segments_primary: 10
+          docs_total: 699
+          docs_deleted: 301
+          bytes: 1048576
+          max_segments_shard: 10
+
+  - name: mass-delete sweep leaves majority tombstones flags
+    expect: fail
+    data:
+      indices:
+        - index: orders-2026-q1
+          shards: 2
+          segments_total: 60
+          segments_primary: 30
+          docs_total: 250000
+          docs_deleted: 750000
+          bytes: 209715200
+          max_segments_shard: 30
+
+  - name: one bad index among many flags
+    expect: fail
+    data:
+      indices:
+        - index: logs-2026-05
+          shards: 1
+          segments_total: 10
+          segments_primary: 10
+          docs_total: 1000
+          docs_deleted: 0
+          bytes: 524288
+          max_segments_shard: 10
+        - index: orders-2026-04
+          shards: 1
+          segments_total: 10
+          segments_primary: 10
+          docs_total: 600
+          docs_deleted: 400
+          bytes: 1048576
+          max_segments_shard: 10

@@ -45,6 +45,8 @@ severity_overrides:
   index_legacy_box_routing: info
   ccr_lease_expiring: error
   license_expiration: error
+  segments_excessive_fragmentation: info
+  segments_deleted_doc_ratio: info
 
 skip_tags: []
 include_tags: []
