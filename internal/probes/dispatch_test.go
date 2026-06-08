@@ -250,6 +250,16 @@ func (f *fakeAPIKeyInspector) APIKeys(context.Context) ([]types.APIKey, error) {
 	return f.Result, f.Err
 }
 
+func (f *fakeAPIKeyInspector) GetAPIKey(context.Context, string) (types.APIKey, error) {
+	if f.Err != nil {
+		return types.APIKey{}, f.Err
+	}
+	if len(f.Result) > 0 {
+		return f.Result[0], nil
+	}
+	return types.APIKey{}, nil
+}
+
 type fakeServiceTokenInspector struct {
 	Result []types.ServiceToken
 	Err    error
