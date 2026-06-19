@@ -19,6 +19,8 @@ import (
 	"strings"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/esops-dev/esops-doctor/internal/exit"
 )
 
 //go:embed completion_templates/bash
@@ -72,12 +74,12 @@ func configureCompletion(c *cli.Command) {
 
 func completionAction(_ context.Context, cmd *cli.Command) error {
 	if cmd.Args().Len() == 0 {
-		return cli.Exit(fmt.Sprintf("no shell provided; available: %s", completionShellList()), 1)
+		return exit.Usage("no shell provided; available: %s", completionShellList())
 	}
 	shell := cmd.Args().First()
 	tmpl, ok := completionScripts[shell]
 	if !ok {
-		return cli.Exit(fmt.Sprintf("unknown shell %q; available: %s", shell, completionShellList()), 1)
+		return exit.Usage("unknown shell %q; available: %s", shell, completionShellList())
 	}
 	// Route through cmdWriter so tests that swap root.Writer capture
 	// the output. urfave/cli does not propagate Writer to subcommands
