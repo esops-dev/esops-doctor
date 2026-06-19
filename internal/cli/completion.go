@@ -18,8 +18,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/esops-dev/esops-doctor/internal/exit"
 	"github.com/urfave/cli/v3"
+
+	"github.com/esops-dev/esops-doctor/internal/exit"
 )
 
 //go:embed completion_templates/bash
