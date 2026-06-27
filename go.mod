@@ -1,6 +1,6 @@
 module github.com/esops-dev/esops-doctor
 
-go 1.26.3
+go 1.26.4
 
 require (
 	github.com/esops-dev/esops-go v0.1.1
