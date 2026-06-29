@@ -6,7 +6,7 @@ require (
 	github.com/esops-dev/esops-go v0.1.1
 	github.com/google/cel-go v0.28.1
 	github.com/testcontainers/testcontainers-go v0.43.0
-	github.com/urfave/cli/v3 v3.10.0
+	github.com/urfave/cli/v3 v3.10.1
 	go.yaml.in/yaml/v3 v3.0.4
 )
 
