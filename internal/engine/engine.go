@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/cel-go/cel"
+	"cel.dev/cel-go/cel"
 
 	"github.com/esops-dev/esops-doctor/internal/findings"
 	"github.com/esops-dev/esops-doctor/internal/rules"
