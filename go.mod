@@ -3,8 +3,8 @@ module github.com/esops-dev/esops-doctor
 go 1.27.4
 
 require (
-	github.com/esops-dev/esops-go v0.1.1
-	github.com/google/cel-go v0.31.0
+	cel.dev/cel-go v0.33.2
+	github.com/esops-dev/esops-go v0.1.2
 	github.com/testcontainers/testcontainers-go v0.43.0
 	github.com/urfave/cli/v3 v3.14.0
 	go.yaml.in/yaml/v3 v3.0.6
@@ -72,7 +72,7 @@ require (
 	github.com/moby/term v0.5.2 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
-	github.com/opensearch-project/opensearch-go/v4 v4.6.0 // indirect
+	github.com/opensearch-project/opensearch-go/v4 v4.8.1 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.5 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
@@ -88,7 +88,8 @@ require (
 	go.opentelemetry.io/otel/metric v1.47.0 // indirect
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	golang.org/x/crypto v0.51.0 // indirect
-	golang.org/x/exp v0.0.0-20261112173441-d10d3b464990 // indirect
+	golang.org/x/exp v0.0.0-20261113113407-e3970619a1a4 // indirect
+	golang.org/x/sync v0.25.0 // indirect
 	golang.org/x/sys v0.50.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20261110000943-09e21b237f2c // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261110000943-09e21b237f2c // indirect
