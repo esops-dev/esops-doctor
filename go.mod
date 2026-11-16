@@ -4,7 +4,7 @@ go 1.27.4
 
 require (
 	cel.dev/cel-go v0.33.2
-	github.com/esops-dev/esops-go v0.1.2
+	github.com/esops-dev/esops-go v0.1.3
 	github.com/testcontainers/testcontainers-go v0.43.0
 	github.com/urfave/cli/v3 v3.14.0
 	go.yaml.in/yaml/v3 v3.0.6
